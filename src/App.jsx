@@ -16,8 +16,11 @@ import {
   Search,
   Pencil,
   Trash2,
+  RefreshCw,
+  Eye,
   Printer,
-  RefreshCw
+  Save,
+  FolderPlus
 } from "lucide-react";
 
 import { supabase } from "./lib/supabase";
@@ -39,7 +42,7 @@ const NAV = [
 ];
 
 /* =========================================================
-   DEFAULT FORMS
+   DEFAULTS
 ========================================================= */
 
 const emptyCustomer = {
@@ -72,9 +75,14 @@ const emptyExpense = {
   notes: ""
 };
 
-/* =========================================================
-   HELPERS
-========================================================= */
+const emptyTransaction = {
+  customer_id: "",
+  invoice_id: "",
+  type: "income",
+  amount: "",
+  transaction_date: new Date().toISOString().slice(0, 10),
+  description: ""
+};
 
 const money = (value) =>
   `₹${Number(value || 0).toLocaleString("en-IN", {
@@ -82,10 +90,12 @@ const money = (value) =>
   })}`;
 
 const dateIn = (value) =>
-  value ? new Date(value).toLocaleDateString("en-IN") : "—";
+  value
+    ? new Date(value).toLocaleDateString("en-IN")
+    : "—";
 
 /* =========================================================
-   LOGIN
+   COMMON COMPONENTS
 ========================================================= */
 
 function Login() {
@@ -96,20 +106,18 @@ function Login() {
 
   async function submit(e) {
     e.preventDefault();
-
     setError("");
     setBusy(true);
 
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password
-    });
+    const { error } =
+      await supabase.auth.signInWithPassword({
+        email,
+        password
+      });
 
     setBusy(false);
 
-    if (error) {
-      setError(error.message);
-    }
+    if (error) setError(error.message);
   }
 
   return (
@@ -122,8 +130,8 @@ function Login() {
         <h1>Business Management</h1>
 
         <p>
-          Billing, customers, payments and business records —
-          all in one place.
+          Billing, customers, products, payments and
+          business records — all in one place.
         </p>
 
         <form onSubmit={submit}>
@@ -156,10 +164,6 @@ function Login() {
   );
 }
 
-/* =========================================================
-   COMMON MODAL
-========================================================= */
-
 function Modal({ title, children, onClose, wide = false }) {
   return (
     <div className="modal-bg">
@@ -177,10 +181,6 @@ function Modal({ title, children, onClose, wide = false }) {
     </div>
   );
 }
-
-/* =========================================================
-   COMMON FIELD
-========================================================= */
 
 function Field({
   label,
@@ -214,25 +214,13 @@ function Field({
   );
 }
 
-/* =========================================================
-   COMMON PAGE
-========================================================= */
-
-function Page({
-  heading,
-  eyebrow,
-  sub,
-  action,
-  children
-}) {
+function Page({ heading, eyebrow, sub, action, children }) {
   return (
     <div className="page">
       <div className="heading">
         <div>
           <small>{eyebrow}</small>
-
           <h1>{heading}</h1>
-
           <p>{sub}</p>
         </div>
 
@@ -243,10 +231,6 @@ function Page({
     </div>
   );
 }
-
-/* =========================================================
-   TOOLBAR
-========================================================= */
 
 function Toolbar({
   query,
@@ -270,40 +254,6 @@ function Toolbar({
     </div>
   );
 }
-
-/* =========================================================
-   TABLE
-========================================================= */
-
-function DataTable({ headers, rows }) {
-  return (
-    <div className="table">
-      <table>
-        <thead>
-          <tr>
-            {headers.map((header) => (
-              <th key={header}>{header}</th>
-            ))}
-          </tr>
-        </thead>
-
-        <tbody>
-          {rows.map((row, index) => (
-            <tr key={index}>
-              {row.map((cell, cellIndex) => (
-                <td key={cellIndex}>{cell}</td>
-              ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-/* =========================================================
-   EMPTY
-========================================================= */
 
 function Empty({
   icon: Icon,
@@ -330,30 +280,15 @@ function Empty({
   );
 }
 
-/* =========================================================
-   STATUS
-========================================================= */
-
 function Status({ text }) {
   return (
     <span
-      className={`status ${String(text || "").toLowerCase()}`}
+      className={`status ${String(
+        text || ""
+      ).toLowerCase()}`}
     >
       {text || "—"}
     </span>
-  );
-}
-
-/* =========================================================
-   STAT
-========================================================= */
-
-function Stat({ title, value }) {
-  return (
-    <div className="stat">
-      <small>{title}</small>
-      <strong>{value}</strong>
-    </div>
   );
 }
 
@@ -373,52 +308,38 @@ function Customers({ businessId, onCount }) {
     if (!businessId) return;
 
     setLoading(true);
-    setError("");
 
     const { data, error } = await supabase
       .from("customers")
       .select("*")
       .eq("business_id", businessId)
-      .order("created_at", {
-        ascending: false
-      });
+      .order("created_at", { ascending: false });
 
-    if (error) {
-      setError(error.message);
-    }
+    if (error) setError(error.message);
 
     setList(data || []);
-
     onCount?.(data?.length || 0);
-
     setLoading(false);
   }
 
   useEffect(() => {
-    if (businessId) {
-      load();
-    }
+    if (businessId) load();
   }, [businessId]);
 
   function openNew() {
-    setForm(emptyCustomer);
-    setModal("new");
+    setForm({ ...emptyCustomer });
     setError("");
+    setModal("new");
   }
 
-  function openEdit(customer) {
-    setForm({
-      ...emptyCustomer,
-      ...customer
-    });
-
-    setModal("edit");
+  function openEdit(item) {
+    setForm({ ...emptyCustomer, ...item });
     setError("");
+    setModal("edit");
   }
 
   async function save(e) {
     e.preventDefault();
-
     setError("");
 
     if (!form.name.trim()) {
@@ -428,8 +349,8 @@ function Customers({ businessId, onCount }) {
 
     const payload = {
       ...form,
-      name: form.name.trim(),
-      business_id: businessId
+      business_id: businessId,
+      name: form.name.trim()
     };
 
     const result = form.id
@@ -447,45 +368,35 @@ function Customers({ businessId, onCount }) {
     }
 
     setModal(null);
-
     load();
   }
 
-  async function remove(customer) {
-    if (!confirm(`Delete ${customer.name}?`)) {
-      return;
-    }
+  async function remove(item) {
+    if (!confirm(`Delete ${item.name}?`)) return;
 
     const { error } = await supabase
       .from("customers")
       .delete()
-      .eq("id", customer.id);
+      .eq("id", item.id);
 
-    if (error) {
-      setError(error.message);
-    } else {
-      load();
-    }
+    if (error) setError(error.message);
+    else load();
   }
 
   const filtered = useMemo(() => {
     const q = query.toLowerCase().trim();
 
-    if (!q) {
-      return list;
-    }
+    if (!q) return list;
 
-    return list.filter((customer) =>
+    return list.filter((x) =>
       [
-        customer.name,
-        customer.phone,
-        customer.email,
-        customer.city,
-        customer.gst_number
-      ].some((value) =>
-        String(value || "")
-          .toLowerCase()
-          .includes(q)
+        x.name,
+        x.phone,
+        x.email,
+        x.city,
+        x.gst_number
+      ].some((v) =>
+        String(v || "").toLowerCase().includes(q)
       )
     );
   }, [list, query]);
@@ -528,49 +439,52 @@ function Customers({ businessId, onCount }) {
             onClick={openNew}
           />
         ) : (
-          <DataTable
-            headers={[
-              "Customer",
-              "Phone",
-              "City",
-              "GST",
-              ""
-            ]}
-            rows={filtered.map((customer) => [
-              <>
-                <strong>{customer.name}</strong>
-                <small>
-                  {customer.email || "No email"}
-                </small>
-              </>,
+          <div className="table">
+            <table>
+              <thead>
+                <tr>
+                  <th>Customer</th>
+                  <th>Phone</th>
+                  <th>City</th>
+                  <th>GST</th>
+                  <th></th>
+                </tr>
+              </thead>
 
-              customer.phone || "—",
+              <tbody>
+                {filtered.map((item) => (
+                  <tr key={item.id}>
+                    <td>
+                      <strong>{item.name}</strong>
+                      <small>
+                        {item.email || "No email"}
+                      </small>
+                    </td>
 
-              customer.city || "—",
+                    <td>{item.phone || "—"}</td>
+                    <td>{item.city || "—"}</td>
+                    <td>{item.gst_number || "—"}</td>
 
-              customer.gst_number || "—",
+                    <td>
+                      <button
+                        className="icon"
+                        onClick={() => openEdit(item)}
+                      >
+                        <Pencil />
+                      </button>
 
-              <>
-                <button
-                  className="icon"
-                  onClick={() =>
-                    openEdit(customer)
-                  }
-                >
-                  <Pencil />
-                </button>
-
-                <button
-                  className="icon danger"
-                  onClick={() =>
-                    remove(customer)
-                  }
-                >
-                  <Trash2 />
-                </button>
-              </>
-            ])}
-          />
+                      <button
+                        className="icon danger"
+                        onClick={() => remove(item)}
+                      >
+                        <Trash2 />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </section>
 
@@ -587,43 +501,34 @@ function Customers({ businessId, onCount }) {
             <Field
               label="Name *"
               value={form.name}
-              onChange={(value) =>
-                setForm({
-                  ...form,
-                  name: value
-                })
+              onChange={(v) =>
+                setForm({ ...form, name: v })
               }
             />
 
             <Field
               label="Phone"
               value={form.phone}
-              onChange={(value) =>
-                setForm({
-                  ...form,
-                  phone: value
-                })
+              onChange={(v) =>
+                setForm({ ...form, phone: v })
               }
             />
 
             <Field
               label="Email"
               value={form.email}
-              onChange={(value) =>
-                setForm({
-                  ...form,
-                  email: value
-                })
+              onChange={(v) =>
+                setForm({ ...form, email: v })
               }
             />
 
             <Field
               label="GST Number"
               value={form.gst_number}
-              onChange={(value) =>
+              onChange={(v) =>
                 setForm({
                   ...form,
-                  gst_number: value
+                  gst_number: v
                 })
               }
             />
@@ -631,10 +536,10 @@ function Customers({ businessId, onCount }) {
             <Field
               label="Address"
               value={form.address}
-              onChange={(value) =>
+              onChange={(v) =>
                 setForm({
                   ...form,
-                  address: value
+                  address: v
                 })
               }
               wide
@@ -643,21 +548,18 @@ function Customers({ businessId, onCount }) {
             <Field
               label="City"
               value={form.city}
-              onChange={(value) =>
-                setForm({
-                  ...form,
-                  city: value
-                })
+              onChange={(v) =>
+                setForm({ ...form, city: v })
               }
             />
 
             <Field
               label="State"
               value={form.state}
-              onChange={(value) =>
+              onChange={(v) =>
                 setForm({
                   ...form,
-                  state: value
+                  state: v
                 })
               }
             />
@@ -665,10 +567,10 @@ function Customers({ businessId, onCount }) {
             <Field
               label="Pincode"
               value={form.pincode}
-              onChange={(value) =>
+              onChange={(v) =>
                 setForm({
                   ...form,
-                  pincode: value
+                  pincode: v
                 })
               }
             />
@@ -676,10 +578,10 @@ function Customers({ businessId, onCount }) {
             <Field
               label="Notes"
               value={form.notes}
-              onChange={(value) =>
+              onChange={(v) =>
                 setForm({
                   ...form,
-                  notes: value
+                  notes: v
                 })
               }
               wide
@@ -702,6 +604,7 @@ function Customers({ businessId, onCount }) {
               </button>
 
               <button>
+                <Save />
                 Save Customer
               </button>
             </div>
@@ -728,54 +631,42 @@ function Products({ businessId, onCount }) {
     if (!businessId) return;
 
     setLoading(true);
-    setError("");
 
     const { data, error } = await supabase
       .from("products")
       .select("*")
       .eq("business_id", businessId)
-      .order("created_at", {
-        ascending: false
-      });
+      .order("created_at", { ascending: false });
 
-    if (error) {
-      setError(error.message);
-    }
+    if (error) setError(error.message);
 
     setList(data || []);
-
     onCount?.(data?.length || 0);
-
     setLoading(false);
   }
 
   useEffect(() => {
-    if (businessId) {
-      load();
-    }
+    if (businessId) load();
   }, [businessId]);
 
   function openNew() {
-    setForm(emptyProduct);
-    setModal("new");
+    setForm({ ...emptyProduct });
     setError("");
+    setModal("new");
   }
 
-  function openEdit(product) {
+  function openEdit(item) {
     setForm({
       ...emptyProduct,
-      ...product,
-      default_price:
-        product.default_price ?? ""
+      ...item
     });
 
-    setModal("edit");
     setError("");
+    setModal("edit");
   }
 
   async function save(e) {
     e.preventDefault();
-
     setError("");
 
     if (!form.name.trim()) {
@@ -792,21 +683,16 @@ function Products({ businessId, onCount }) {
       price !== null &&
       !Number.isFinite(price)
     ) {
-      setError(
-        "Default price must be a number."
-      );
+      setError("Default price must be a number.");
       return;
     }
 
     const payload = {
       business_id: businessId,
       name: form.name.trim(),
-      category:
-        form.category.trim() || null,
-      description:
-        form.description.trim() || null,
-      unit:
-        form.unit.trim() || null,
+      category: form.category || null,
+      description: form.description || null,
+      unit: form.unit || null,
       default_price: price
     };
 
@@ -825,44 +711,34 @@ function Products({ businessId, onCount }) {
     }
 
     setModal(null);
-
     load();
   }
 
-  async function remove(product) {
-    if (!confirm(`Delete ${product.name}?`)) {
-      return;
-    }
+  async function remove(item) {
+    if (!confirm(`Delete ${item.name}?`)) return;
 
     const { error } = await supabase
       .from("products")
       .delete()
-      .eq("id", product.id);
+      .eq("id", item.id);
 
-    if (error) {
-      setError(error.message);
-    } else {
-      load();
-    }
+    if (error) setError(error.message);
+    else load();
   }
 
   const filtered = useMemo(() => {
     const q = query.toLowerCase().trim();
 
-    if (!q) {
-      return list;
-    }
+    if (!q) return list;
 
-    return list.filter((product) =>
+    return list.filter((x) =>
       [
-        product.name,
-        product.category,
-        product.description,
-        product.unit
-      ].some((value) =>
-        String(value || "")
-          .toLowerCase()
-          .includes(q)
+        x.name,
+        x.category,
+        x.description,
+        x.unit
+      ].some((v) =>
+        String(v || "").toLowerCase().includes(q)
       )
     );
   }, [list, query]);
@@ -896,64 +772,63 @@ function Products({ businessId, onCount }) {
         ) : filtered.length === 0 ? (
           <Empty
             icon={Package}
-            title={
-              query
-                ? "No matching products"
-                : "No products yet"
-            }
-            button={!query ? "Add Product" : ""}
+            title="No products yet"
+            button="Add Product"
             onClick={openNew}
           />
         ) : (
-          <DataTable
-            headers={[
-              "Product",
-              "Category",
-              "Unit",
-              "Default Price",
-              ""
-            ]}
-            rows={filtered.map((product) => [
-              <>
-                <strong>{product.name}</strong>
+          <div className="table">
+            <table>
+              <thead>
+                <tr>
+                  <th>Product</th>
+                  <th>Category</th>
+                  <th>Unit</th>
+                  <th>Rate</th>
+                  <th></th>
+                </tr>
+              </thead>
 
-                <small>
-                  {product.description ||
-                    "No description"}
-                </small>
-              </>,
+              <tbody>
+                {filtered.map((item) => (
+                  <tr key={item.id}>
+                    <td>
+                      <strong>{item.name}</strong>
+                      <small>
+                        {item.description ||
+                          "No description"}
+                      </small>
+                    </td>
 
-              product.category || "—",
+                    <td>{item.category || "—"}</td>
+                    <td>{item.unit || "—"}</td>
 
-              product.unit || "—",
+                    <td>
+                      {item.default_price == null
+                        ? "—"
+                        : money(item.default_price)}
+                    </td>
 
-              product.default_price == null
-                ? "—"
-                : money(
-                    product.default_price
-                  ),
+                    <td>
+                      <button
+                        className="icon"
+                        onClick={() => openEdit(item)}
+                      >
+                        <Pencil />
+                      </button>
 
-              <>
-                <button
-                  className="icon"
-                  onClick={() =>
-                    openEdit(product)
-                  }
-                >
-                  <Pencil />
-                </button>
-
-                <button
-                  className="icon danger"
-                  onClick={() =>
-                    remove(product)
-                  }
-                >
-                  <Trash2 />
-                </button>
-              </>
-            ])}
-          />
+                      <button
+                        className="icon danger"
+                        onClick={() => remove(item)}
+                      >
+                        <Trash2 />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </section>
 
@@ -970,10 +845,10 @@ function Products({ businessId, onCount }) {
             <Field
               label="Product Name *"
               value={form.name}
-              onChange={(value) =>
+              onChange={(v) =>
                 setForm({
                   ...form,
-                  name: value
+                  name: v
                 })
               }
             />
@@ -981,35 +856,33 @@ function Products({ businessId, onCount }) {
             <Field
               label="Category"
               value={form.category}
-              onChange={(value) =>
+              onChange={(v) =>
                 setForm({
                   ...form,
-                  category: value
+                  category: v
                 })
               }
-              placeholder="Jodhpur Stone"
             />
 
             <Field
               label="Unit"
               value={form.unit}
-              onChange={(value) =>
+              onChange={(v) =>
                 setForm({
                   ...form,
-                  unit: value
+                  unit: v
                 })
               }
-              placeholder="sq ft"
             />
 
             <Field
               label="Default Price"
               type="number"
               value={form.default_price}
-              onChange={(value) =>
+              onChange={(v) =>
                 setForm({
                   ...form,
-                  default_price: value
+                  default_price: v
                 })
               }
             />
@@ -1017,10 +890,10 @@ function Products({ businessId, onCount }) {
             <Field
               label="Description"
               value={form.description}
-              onChange={(value) =>
+              onChange={(v) =>
                 setForm({
                   ...form,
-                  description: value
+                  description: v
                 })
               }
               wide
@@ -1043,6 +916,7 @@ function Products({ businessId, onCount }) {
               </button>
 
               <button>
+                <Save />
                 Save Product
               </button>
             </div>
@@ -1054,64 +928,50 @@ function Products({ businessId, onCount }) {
 }
 
 /* =========================================================
-   INVOICE BUILDER
+   INVOICE EDITOR
 ========================================================= */
 
-function InvoiceBuilder({
+function InvoiceEditor({
   businessId,
-  onSaved
+  existing,
+  onSaved,
+  onClose
 }) {
-  const [customers, setCustomers] =
-    useState([]);
+  const [customers, setCustomers] = useState([]);
+  const [products, setProducts] = useState([]);
+  const [settings, setSettings] = useState(null);
 
-  const [products, setProducts] =
-    useState([]);
+  const [customerId, setCustomerId] = useState(
+    existing?.customer_id || ""
+  );
 
-  const [settings, setSettings] =
-    useState(null);
+  const [invoiceDate, setInvoiceDate] = useState(
+    existing?.invoice_date ||
+      new Date().toISOString().slice(0, 10)
+  );
 
-  const [customerId, setCustomerId] =
-    useState("");
+  const [dueDate, setDueDate] = useState(
+    existing?.due_date || ""
+  );
 
-  const [invoiceDate, setInvoiceDate] =
-    useState(
-      new Date()
-        .toISOString()
-        .slice(0, 10)
-    );
+  const [discount, setDiscount] = useState(
+    existing?.discount ?? ""
+  );
 
-  const [dueDate, setDueDate] =
-    useState("");
+  const [taxRate, setTaxRate] = useState(
+    existing?.tax_rate ?? ""
+  );
 
-  const [discount, setDiscount] =
-    useState("");
+  const [notes, setNotes] = useState(
+    existing?.notes || ""
+  );
 
-  const [taxRate, setTaxRate] =
-    useState("");
-
-  const [notes, setNotes] =
-    useState("");
-
-  const [items, setItems] = useState([
-    {
-      product_id: "",
-      product_name: "",
-      description: "",
-      quantity: 1,
-      unit: "sq ft",
-      rate: "",
-      amount: 0
-    }
-  ]);
-
-  const [error, setError] =
-    useState("");
-
-  const [busy, setBusy] =
-    useState(false);
+  const [items, setItems] = useState([]);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    async function loadData() {
+    async function load() {
       const [
         customerResult,
         productResult,
@@ -1136,46 +996,61 @@ function InvoiceBuilder({
           .maybeSingle()
       ]);
 
-      setCustomers(
-        customerResult.data || []
-      );
-
-      setProducts(
-        productResult.data || []
-      );
-
-      setSettings(
-        settingsResult.data || null
-      );
+      setCustomers(customerResult.data || []);
+      setProducts(productResult.data || []);
+      setSettings(settingsResult.data || null);
 
       if (
-        settingsResult.data?.default_tax_rate !=
-        null
+        !existing &&
+        settingsResult.data?.default_tax_rate != null
       ) {
         setTaxRate(
           String(
-            settingsResult.data
-              .default_tax_rate
+            settingsResult.data.default_tax_rate
           )
         );
       }
+
+      if (existing) {
+        const { data } = await supabase
+          .from("invoice_items")
+          .select("*")
+          .eq("invoice_id", existing.id)
+          .order("created_at");
+
+        setItems(
+          (data || []).map((x) => ({
+            product_id: x.product_id || "",
+            product_name: x.product_name || "",
+            description: x.description || "",
+            quantity: x.quantity || 1,
+            unit: x.unit || "sq ft",
+            rate: x.rate || 0,
+            amount: x.amount || 0
+          }))
+        );
+      } else {
+        setItems([
+          {
+            product_id: "",
+            product_name: "",
+            description: "",
+            quantity: 1,
+            unit: "sq ft",
+            rate: "",
+            amount: 0
+          }
+        ]);
+      }
     }
 
-    if (businessId) {
-      loadData();
-    }
-  }, [businessId]);
+    load();
+  }, [businessId, existing]);
 
-  function setItem(
-    index,
-    key,
-    value
-  ) {
+  function setItem(index, key, value) {
     setItems((current) =>
-      current.map((item, itemIndex) => {
-        if (itemIndex !== index) {
-          return item;
-        }
+      current.map((item, i) => {
+        if (i !== index) return item;
 
         const next = {
           ...item,
@@ -1204,43 +1079,25 @@ function InvoiceBuilder({
     );
   }
 
-  function selectProduct(
-    index,
-    productId
-  ) {
+  function selectProduct(index, productId) {
     const product = products.find(
-      (item) => item.id === productId
+      (x) => x.id === productId
     );
 
     setItems((current) =>
-      current.map((item, itemIndex) => {
-        if (itemIndex !== index) {
-          return item;
-        }
+      current.map((item, i) => {
+        if (i !== index) return item;
 
         return {
           ...item,
-
-          product_id:
-            product?.id || "",
-
-          product_name:
-            product?.name || "",
-
-          description:
-            product?.description || "",
-
-          unit:
-            product?.unit || "sq ft",
-
-          rate:
-            product?.default_price ?? "",
-
+          product_id: product?.id || "",
+          product_name: product?.name || "",
+          description: product?.description || "",
+          unit: product?.unit || "sq ft",
+          rate: product?.default_price ?? "",
           amount:
             Number(item.quantity || 0) *
-            Number(
-              product?.default_price || 0
-            )
+            Number(product?.default_price || 0)
         };
       })
     );
@@ -1265,9 +1122,7 @@ function InvoiceBuilder({
     setItems((current) =>
       current.length === 1
         ? current
-        : current.filter(
-            (_, i) => i !== index
-          )
+        : current.filter((_, i) => i !== index)
     );
   }
 
@@ -1277,43 +1132,42 @@ function InvoiceBuilder({
     0
   );
 
-  const discountAmount =
-    Number(discount || 0);
+  const discountAmount = Number(discount || 0);
 
-  const taxableAmount = Math.max(
+  const taxable = Math.max(
     0,
     subtotal - discountAmount
   );
 
   const taxAmount =
-    taxableAmount *
-    (Number(taxRate || 0) / 100);
+    taxable * (Number(taxRate || 0) / 100);
 
-  const totalAmount =
-    taxableAmount + taxAmount;
+  const total = taxable + taxAmount;
 
-  async function saveInvoice(e) {
+  async function save(e) {
     e.preventDefault();
-
     setError("");
 
     if (!customerId) {
-      setError("Select a customer.");
+      setError("Please select a customer.");
+      return;
+    }
+
+    if (!items.length) {
+      setError("Add at least one item.");
       return;
     }
 
     if (
       items.some(
-        (item) =>
-          !item.product_name ||
-          Number(item.quantity) <= 0 ||
-          Number(item.rate) < 0
+        (x) =>
+          !x.product_name ||
+          Number(x.quantity) <= 0
       )
     ) {
       setError(
-        "Complete all invoice items."
+        "Complete every invoice item correctly."
       );
-
       return;
     }
 
@@ -1323,14 +1177,20 @@ function InvoiceBuilder({
       data: { user }
     } = await supabase.auth.getUser();
 
-    const prefix =
-      settings?.invoice_prefix || "INV";
+    let invoiceNumber =
+      existing?.invoice_number;
 
-    const invoiceNumber = `${prefix}-${Date.now()
-      .toString()
-      .slice(-8)}`;
+    if (!invoiceNumber) {
+      const prefix =
+        settings?.invoice_prefix || "INV";
 
-    const invoicePayload = {
+      invoiceNumber =
+        `${prefix}-${Date.now()
+          .toString()
+          .slice(-8)}`;
+    }
+
+    const payload = {
       business_id: businessId,
       customer_id: customerId,
       invoice_number: invoiceNumber,
@@ -1340,21 +1200,38 @@ function InvoiceBuilder({
       discount: discountAmount,
       tax_rate: Number(taxRate || 0),
       tax_amount: taxAmount,
-      total_amount: totalAmount,
+      total_amount: total,
       notes: notes || null,
-      status: "issued",
-      payment_status: "unpaid",
-      created_by: user?.id || null
+      status: existing?.status || "issued",
+      payment_status:
+        existing?.payment_status || "unpaid",
+      created_by:
+        existing?.created_by || user?.id || null
     };
 
-    const {
-      data: invoice,
-      error: invoiceError
-    } = await supabase
-      .from("invoices")
-      .insert(invoicePayload)
-      .select()
-      .single();
+    let invoice;
+    let invoiceError;
+
+    if (existing) {
+      const result = await supabase
+        .from("invoices")
+        .update(payload)
+        .eq("id", existing.id)
+        .select()
+        .single();
+
+      invoice = result.data;
+      invoiceError = result.error;
+    } else {
+      const result = await supabase
+        .from("invoices")
+        .insert(payload)
+        .select()
+        .single();
+
+      invoice = result.data;
+      invoiceError = result.error;
+    }
 
     if (invoiceError) {
       setBusy(false);
@@ -1362,49 +1239,48 @@ function InvoiceBuilder({
       return;
     }
 
-    const itemRows = items.map(
-      (item) => ({
-        invoice_id: invoice.id,
-        product_id:
-          item.product_id || null,
-        product_name:
-          item.product_name,
-        description:
-          item.description || null,
-        quantity:
-          Number(item.quantity),
-        unit:
-          item.unit || null,
-        rate:
-          Number(item.rate),
-        amount:
-          Number(item.amount)
-      })
-    );
+    if (existing) {
+      const { error: deleteError } =
+        await supabase
+          .from("invoice_items")
+          .delete()
+          .eq("invoice_id", invoice.id);
 
-    const {
-      error: itemError
-    } = await supabase
-      .from("invoice_items")
-      .insert(itemRows);
+      if (deleteError) {
+        setBusy(false);
+        setError(deleteError.message);
+        return;
+      }
+    }
+
+    const itemRows = items.map((item) => ({
+      invoice_id: invoice.id,
+      product_id: item.product_id || null,
+      product_name: item.product_name,
+      description: item.description || null,
+      quantity: Number(item.quantity),
+      unit: item.unit || null,
+      rate: Number(item.rate || 0),
+      amount: Number(item.amount || 0)
+    }));
+
+    const { error: itemError } =
+      await supabase
+        .from("invoice_items")
+        .insert(itemRows);
 
     if (itemError) {
-      await supabase
-        .from("invoices")
-        .delete()
-        .eq("id", invoice.id);
-
       setBusy(false);
-
       setError(itemError.message);
-
       return;
     }
 
     setBusy(false);
 
     alert(
-      `Invoice ${invoiceNumber} saved successfully.`
+      existing
+        ? "Invoice updated successfully."
+        : `Invoice ${invoiceNumber} created successfully.`
     );
 
     onSaved?.();
@@ -1412,13 +1288,17 @@ function InvoiceBuilder({
 
   return (
     <Page
-      heading="New Invoice"
+      heading={
+        existing
+          ? "Edit Invoice"
+          : "New Invoice"
+      }
       eyebrow="BILLING"
-      sub="Create and save a customer invoice."
+      sub="Create or update a customer invoice."
       action={
         <button
-          className="secondary"
           type="button"
+          className="secondary"
           onClick={() => window.print()}
         >
           <Printer />
@@ -1427,16 +1307,15 @@ function InvoiceBuilder({
       }
     >
       <form
-        onSubmit={saveInvoice}
         className="invoice-layout"
+        onSubmit={save}
       >
         <section className="panel">
           <div className="section-title">
             <div>
               <h3>Invoice Details</h3>
               <p>
-                Customer and billing
-                information.
+                Customer and billing information.
               </p>
             </div>
           </div>
@@ -1448,25 +1327,21 @@ function InvoiceBuilder({
               <select
                 value={customerId}
                 onChange={(e) =>
-                  setCustomerId(
-                    e.target.value
-                  )
+                  setCustomerId(e.target.value)
                 }
               >
                 <option value="">
                   Select customer
                 </option>
 
-                {customers.map(
-                  (customer) => (
-                    <option
-                      key={customer.id}
-                      value={customer.id}
-                    >
-                      {customer.name}
-                    </option>
-                  )
-                )}
+                {customers.map((x) => (
+                  <option
+                    key={x.id}
+                    value={x.id}
+                  >
+                    {x.name}
+                  </option>
+                ))}
               </select>
             </label>
 
@@ -1511,10 +1386,9 @@ function InvoiceBuilder({
         <section className="panel">
           <div className="section-title">
             <div>
-              <h3>Items</h3>
+              <h3>Invoice Items</h3>
               <p>
-                Add stone products to
-                the invoice.
+                Products, quantities and rates.
               </p>
             </div>
 
@@ -1550,16 +1424,14 @@ function InvoiceBuilder({
                       Select product
                     </option>
 
-                    {products.map(
-                      (product) => (
-                        <option
-                          key={product.id}
-                          value={product.id}
-                        >
-                          {product.name}
-                        </option>
-                      )
-                    )}
+                    {products.map((x) => (
+                      <option
+                        key={x.id}
+                        value={x.id}
+                      >
+                        {x.name}
+                      </option>
+                    ))}
                   </select>
                 </label>
 
@@ -1639,15 +1511,11 @@ function InvoiceBuilder({
         <section className="panel totals-panel">
           <div>
             <span>Subtotal</span>
-
-            <strong>
-              {money(subtotal)}
-            </strong>
+            <strong>{money(subtotal)}</strong>
           </div>
 
           <div>
             <span>Discount</span>
-
             <strong>
               − {money(discountAmount)}
             </strong>
@@ -1665,10 +1533,7 @@ function InvoiceBuilder({
 
           <div className="grand">
             <span>Grand Total</span>
-
-            <strong>
-              {money(totalAmount)}
-            </strong>
+            <strong>{money(total)}</strong>
           </div>
 
           {error && (
@@ -1682,8 +1547,18 @@ function InvoiceBuilder({
             disabled={busy}
           >
             {busy
-              ? "Saving Invoice..."
+              ? "Saving..."
+              : existing
+              ? "Update Invoice"
               : "Save Invoice"}
+          </button>
+
+          <button
+            type="button"
+            className="secondary"
+            onClick={onClose}
+          >
+            Cancel
           </button>
         </section>
       </form>
@@ -1697,106 +1572,111 @@ function InvoiceBuilder({
 
 function Invoices({ businessId }) {
   const [list, setList] = useState([]);
-  const [customers, setCustomers] =
-    useState([]);
+  const [customers, setCustomers] = useState([]);
   const [query, setQuery] = useState("");
-  const [mode, setMode] =
-    useState("list");
-  const [loading, setLoading] =
-    useState(true);
-  const [error, setError] =
-    useState("");
+  const [mode, setMode] = useState("list");
+  const [editing, setEditing] = useState(null);
+  const [viewing, setViewing] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   async function load() {
     setLoading(true);
 
-    const [
-      invoiceResult,
-      customerResult
-    ] = await Promise.all([
-      supabase
-        .from("invoices")
-        .select("*")
-        .eq("business_id", businessId)
-        .order("invoice_date", {
-          ascending: false
-        }),
+    const [invoiceResult, customerResult] =
+      await Promise.all([
+        supabase
+          .from("invoices")
+          .select("*")
+          .eq("business_id", businessId)
+          .order("invoice_date", {
+            ascending: false
+          }),
 
-      supabase
-        .from("customers")
-        .select("id,name")
-        .eq("business_id", businessId)
-    ]);
+        supabase
+          .from("customers")
+          .select("id,name")
+          .eq("business_id", businessId)
+      ]);
 
-    if (invoiceResult.error) {
-      setError(
-        invoiceResult.error.message
-      );
-    }
+    if (invoiceResult.error)
+      setError(invoiceResult.error.message);
 
     setList(invoiceResult.data || []);
-
-    setCustomers(
-      customerResult.data || []
-    );
-
+    setCustomers(customerResult.data || []);
     setLoading(false);
   }
 
   useEffect(() => {
-    if (businessId) {
-      load();
-    }
+    if (businessId) load();
   }, [businessId]);
 
-  const customerNames = useMemo(
-    () =>
-      Object.fromEntries(
-        customers.map((customer) => [
-          customer.id,
-          customer.name
-        ])
-      ),
-    [customers]
+  const customerNames = Object.fromEntries(
+    customers.map((x) => [x.id, x.name])
   );
 
   const filtered = useMemo(() => {
-    const q = query
-      .toLowerCase()
-      .trim();
+    const q = query.toLowerCase().trim();
 
-    if (!q) {
-      return list;
-    }
+    if (!q) return list;
 
-    return list.filter((invoice) =>
+    return list.filter((x) =>
       [
-        invoice.invoice_number,
-        customerNames[
-          invoice.customer_id
-        ],
-        invoice.status,
-        invoice.payment_status
-      ].some((value) =>
-        String(value || "")
-          .toLowerCase()
-          .includes(q)
+        x.invoice_number,
+        customerNames[x.customer_id],
+        x.status,
+        x.payment_status
+      ].some((v) =>
+        String(v || "").toLowerCase().includes(q)
       )
     );
-  }, [
-    list,
-    query,
-    customerNames
-  ]);
+  }, [list, query, customerNames]);
+
+  async function remove(invoice) {
+    if (
+      !confirm(
+        `Delete invoice ${invoice.invoice_number}?`
+      )
+    ) {
+      return;
+    }
+
+    const { error } = await supabase
+      .from("invoices")
+      .delete()
+      .eq("id", invoice.id);
+
+    if (error) {
+      setError(error.message);
+      return;
+    }
+
+    load();
+  }
 
   if (mode === "new") {
     return (
-      <InvoiceBuilder
+      <InvoiceEditor
         businessId={businessId}
         onSaved={() => {
           setMode("list");
           load();
         }}
+        onClose={() => setMode("list")}
+      />
+    );
+  }
+
+  if (editing) {
+    return (
+      <InvoiceEditor
+        businessId={businessId}
+        existing={editing}
+        onSaved={() => {
+          setEditing(null);
+          load();
+        }}
+        onClose={() => setEditing(null)}
       />
     );
   }
@@ -1805,13 +1685,9 @@ function Invoices({ businessId }) {
     <Page
       heading="Invoices"
       eyebrow="BILLING HISTORY"
-      sub="View saved invoices and billing status."
+      sub="Create, view, edit and manage invoices."
       action={
-        <button
-          onClick={() =>
-            setMode("new")
-          }
-        >
+        <button onClick={() => setMode("new")}>
           <Plus />
           New Invoice
         </button>
@@ -1821,18 +1697,14 @@ function Invoices({ businessId }) {
         <Toolbar
           query={query}
           setQuery={setQuery}
-          placeholder="Search invoice number, customer or status..."
+          placeholder="Search invoice, customer or status..."
           count={`${filtered.length} invoice${
-            filtered.length !== 1
-              ? "s"
-              : ""
+            filtered.length !== 1 ? "s" : ""
           }`}
         />
 
         {error && (
-          <div className="error">
-            {error}
-          </div>
+          <div className="error">{error}</div>
         )}
 
         {loading ? (
@@ -1842,56 +1714,278 @@ function Invoices({ businessId }) {
             icon={FileText}
             title="No invoices yet"
             button="New Invoice"
-            onClick={() =>
-              setMode("new")
-            }
+            onClick={() => setMode("new")}
           />
         ) : (
-          <DataTable
-            headers={[
-              "Invoice",
-              "Customer",
-              "Date",
-              "Total",
-              "Status",
-              "Payment"
-            ]}
-            rows={filtered.map(
-              (invoice) => [
-                <strong>
-                  {invoice.invoice_number}
-                </strong>,
+          <div className="table">
+            <table>
+              <thead>
+                <tr>
+                  <th>Invoice</th>
+                  <th>Customer</th>
+                  <th>Date</th>
+                  <th>Total</th>
+                  <th>Payment</th>
+                  <th></th>
+                </tr>
+              </thead>
 
-                customerNames[
-                  invoice.customer_id
-                ] ||
-                  "Walk-in / Unknown",
+              <tbody>
+                {filtered.map((invoice) => (
+                  <tr key={invoice.id}>
+                    <td>
+                      <strong>
+                        {invoice.invoice_number}
+                      </strong>
+                    </td>
 
-                dateIn(
-                  invoice.invoice_date
-                ),
+                    <td>
+                      {customerNames[
+                        invoice.customer_id
+                      ] || "—"}
+                    </td>
 
-                money(
-                  invoice.total_amount
-                ),
+                    <td>
+                      {dateIn(
+                        invoice.invoice_date
+                      )}
+                    </td>
 
-                <Status
-                  text={
-                    invoice.status
-                  }
-                />,
+                    <td>
+                      {money(invoice.total_amount)}
+                    </td>
 
-                <Status
-                  text={
-                    invoice.payment_status
-                  }
-                />
-              ]
-            )}
-          />
+                    <td>
+                      <Status
+                        text={
+                          invoice.payment_status
+                        }
+                      />
+                    </td>
+
+                    <td>
+                      <button
+                        className="icon"
+                        onClick={() =>
+                          setViewing(invoice)
+                        }
+                      >
+                        <Eye />
+                      </button>
+
+                      <button
+                        className="icon"
+                        onClick={() =>
+                          setEditing(invoice)
+                        }
+                      >
+                        <Pencil />
+                      </button>
+
+                      <button
+                        className="icon danger"
+                        onClick={() =>
+                          remove(invoice)
+                        }
+                      >
+                        <Trash2 />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </section>
+
+      {viewing && (
+        <InvoiceView
+          invoice={viewing}
+          customerName={
+            customerNames[
+              viewing.customer_id
+            ]
+          }
+          onClose={() => setViewing(null)}
+        />
+      )}
     </Page>
+  );
+}
+
+/* =========================================================
+   INVOICE VIEW
+========================================================= */
+
+function InvoiceView({
+  invoice,
+  customerName,
+  onClose
+}) {
+  const [items, setItems] = useState([]);
+  const [customer, setCustomer] = useState(null);
+
+  useEffect(() => {
+    async function load() {
+      const { data } = await supabase
+        .from("invoice_items")
+        .select("*")
+        .eq("invoice_id", invoice.id)
+        .order("created_at");
+
+      setItems(data || []);
+
+      if (invoice.customer_id) {
+        const { data: customerData } =
+          await supabase
+            .from("customers")
+            .select("*")
+            .eq("id", invoice.customer_id)
+            .maybeSingle();
+
+        setCustomer(customerData);
+      }
+    }
+
+    load();
+  }, [invoice]);
+
+  return (
+    <Modal
+      title={`Invoice ${invoice.invoice_number}`}
+      onClose={onClose}
+      wide
+    >
+      <div className="invoice-print">
+        <div className="section-title">
+          <div>
+            <h3>Neelkanth Stones</h3>
+            <p>
+              Invoice: {invoice.invoice_number}
+            </p>
+          </div>
+
+          <button
+            className="secondary"
+            onClick={() => window.print()}
+          >
+            <Printer />
+            Print
+          </button>
+        </div>
+
+        <div className="grid">
+          <div>
+            <strong>Customer</strong>
+            <p>
+              {customerName ||
+                customer?.name ||
+                "—"}
+            </p>
+          </div>
+
+          <div>
+            <strong>Invoice Date</strong>
+            <p>
+              {dateIn(invoice.invoice_date)}
+            </p>
+          </div>
+
+          <div>
+            <strong>Due Date</strong>
+            <p>
+              {dateIn(invoice.due_date)}
+            </p>
+          </div>
+
+          <div>
+            <strong>Payment Status</strong>
+            <p>
+              <Status
+                text={invoice.payment_status}
+              />
+            </p>
+          </div>
+        </div>
+
+        <div className="table">
+          <table>
+            <thead>
+              <tr>
+                <th>Product</th>
+                <th>Qty</th>
+                <th>Unit</th>
+                <th>Rate</th>
+                <th>Amount</th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {items.map((item) => (
+                <tr key={item.id}>
+                  <td>
+                    {item.product_name}
+                  </td>
+
+                  <td>
+                    {item.quantity}
+                  </td>
+
+                  <td>
+                    {item.unit || "—"}
+                  </td>
+
+                  <td>
+                    {money(item.rate)}
+                  </td>
+
+                  <td>
+                    {money(item.amount)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="totals-panel">
+          <div>
+            <span>Subtotal</span>
+            <strong>
+              {money(invoice.subtotal)}
+            </strong>
+          </div>
+
+          <div>
+            <span>Discount</span>
+            <strong>
+              {money(invoice.discount)}
+            </strong>
+          </div>
+
+          <div>
+            <span>Tax</span>
+            <strong>
+              {money(invoice.tax_amount)}
+            </strong>
+          </div>
+
+          <div className="grand">
+            <span>Total</span>
+            <strong>
+              {money(invoice.total_amount)}
+            </strong>
+          </div>
+        </div>
+
+        {invoice.notes && (
+          <div className="notice">
+            {invoice.notes}
+          </div>
+        )}
+      </div>
+    </Modal>
   );
 }
 
@@ -1900,41 +1994,25 @@ function Invoices({ businessId }) {
 ========================================================= */
 
 function Payments({ businessId }) {
-  const [list, setList] =
-    useState([]);
+  const [list, setList] = useState([]);
+  const [invoices, setInvoices] = useState([]);
+  const [customers, setCustomers] = useState([]);
+  const [modal, setModal] = useState(false);
+  const [error, setError] = useState("");
 
-  const [invoices, setInvoices] =
-    useState([]);
-
-  const [customers, setCustomers] =
-    useState([]);
-
-  const [form, setForm] =
-    useState({
-      invoice_id: "",
-      customer_id: "",
-      amount: "",
-      payment_date:
-        new Date()
-          .toISOString()
-          .slice(0, 10),
-      payment_method: "Cash",
-      reference_number: "",
-      notes: ""
-    });
-
-  const [modal, setModal] =
-    useState(false);
-
-  const [error, setError] =
-    useState("");
-
-  const [loading, setLoading] =
-    useState(true);
+  const [form, setForm] = useState({
+    invoice_id: "",
+    customer_id: "",
+    amount: "",
+    payment_date: new Date()
+      .toISOString()
+      .slice(0, 10),
+    payment_method: "Cash",
+    reference_number: "",
+    notes: ""
+  });
 
   async function load() {
-    setLoading(true);
-
     const [
       paymentResult,
       invoiceResult,
@@ -1951,10 +2029,9 @@ function Payments({ businessId }) {
       supabase
         .from("invoices")
         .select(
-          "id,invoice_number,customer_id,total_amount,payment_status"
+          "id,invoice_number,customer_id,total_amount"
         )
-        .eq("business_id", businessId)
-        .neq("status", "cancelled"),
+        .eq("business_id", businessId),
 
       supabase
         .from("customers")
@@ -1962,188 +2039,133 @@ function Payments({ businessId }) {
         .eq("business_id", businessId)
     ]);
 
-    if (paymentResult.error) {
-      setError(
-        paymentResult.error.message
-      );
-    }
+    if (paymentResult.error)
+      setError(paymentResult.error.message);
 
     setList(paymentResult.data || []);
-    setInvoices(
-      invoiceResult.data || []
-    );
-    setCustomers(
-      customerResult.data || []
-    );
-
-    setLoading(false);
+    setInvoices(invoiceResult.data || []);
+    setCustomers(customerResult.data || []);
   }
 
   useEffect(() => {
-    if (businessId) {
-      load();
-    }
+    if (businessId) load();
   }, [businessId]);
 
-  const customerNames =
-    Object.fromEntries(
-      customers.map((customer) => [
-        customer.id,
-        customer.name
-      ])
-    );
+  const customerNames = Object.fromEntries(
+    customers.map((x) => [x.id, x.name])
+  );
 
-  const invoiceNames =
-    Object.fromEntries(
-      invoices.map((invoice) => [
-        invoice.id,
-        invoice.invoice_number
-      ])
-    );
+  const invoiceNames = Object.fromEntries(
+    invoices.map((x) => [
+      x.id,
+      x.invoice_number
+    ])
+  );
 
   function selectInvoice(id) {
     const invoice = invoices.find(
-      (item) => item.id === id
+      (x) => x.id === id
     );
 
-    setForm((current) => ({
-      ...current,
+    setForm({
+      ...form,
       invoice_id: id,
       customer_id:
         invoice?.customer_id || ""
-    }));
+    });
   }
 
   async function save(e) {
     e.preventDefault();
-
     setError("");
 
-    if (
-      !Number(form.amount) ||
-      Number(form.amount) <= 0
-    ) {
-      setError(
-        "Enter a valid payment amount."
-      );
-
+    if (Number(form.amount) <= 0) {
+      setError("Enter a valid payment amount.");
       return;
     }
 
     const {
       data: { user }
-    } =
-      await supabase.auth.getUser();
+    } = await supabase.auth.getUser();
 
     const payload = {
       business_id: businessId,
-      invoice_id:
-        form.invoice_id || null,
-      customer_id:
-        form.customer_id || null,
+      invoice_id: form.invoice_id || null,
+      customer_id: form.customer_id || null,
       amount: Number(form.amount),
       payment_date:
         form.payment_date || null,
-      payment_method:
-        form.payment_method,
+      payment_method: form.payment_method,
       reference_number:
         form.reference_number || null,
       notes: form.notes || null,
-      received_by:
-        user?.id || null
+      received_by: user?.id || null
     };
 
-    const {
-      data: payment,
-      error
-    } = await supabase
-      .from("payments")
-      .insert(payload)
-      .select()
-      .single();
+    const { data: payment, error } =
+      await supabase
+        .from("payments")
+        .insert(payload)
+        .select()
+        .single();
 
     if (error) {
       setError(error.message);
       return;
     }
 
-    /* -----------------------------------------
-       Update invoice payment status
-    ----------------------------------------- */
-
     if (form.invoice_id) {
-      const invoice =
-        invoices.find(
-          (item) =>
-            item.id ===
-            form.invoice_id
-        );
+      const invoice = invoices.find(
+        (x) => x.id === form.invoice_id
+      );
 
-      const previousPayments =
+      const previous =
         list
           .filter(
-            (item) =>
-              item.invoice_id ===
-              form.invoice_id
+            (x) =>
+              x.invoice_id === form.invoice_id
           )
           .reduce(
-            (sum, item) =>
-              sum +
-              Number(
-                item.amount || 0
-              ),
+            (sum, x) =>
+              sum + Number(x.amount || 0),
             0
           );
 
       const paid =
-        previousPayments +
-        Number(form.amount);
+        previous + Number(form.amount);
 
-      const invoiceTotal =
-        Number(
-          invoice?.total_amount || 0
-        );
+      const total =
+        Number(invoice?.total_amount || 0);
 
-      let paymentStatus = "partial";
-
-      if (paid >= invoiceTotal) {
-        paymentStatus = "paid";
-      }
+      const status =
+        paid >= total
+          ? "paid"
+          : paid > 0
+          ? "partial"
+          : "unpaid";
 
       await supabase
         .from("invoices")
         .update({
-          payment_status:
-            paymentStatus
+          payment_status: status
         })
-        .eq(
-          "id",
-          form.invoice_id
-        );
+        .eq("id", form.invoice_id);
     }
-
-    /* -----------------------------------------
-       Create transaction
-    ----------------------------------------- */
 
     await supabase
       .from("transactions")
       .insert({
         business_id: businessId,
-        customer_id:
-          form.customer_id || null,
-        invoice_id:
-          form.invoice_id || null,
-        payment_id:
-          payment?.id || null,
+        customer_id: form.customer_id || null,
+        invoice_id: form.invoice_id || null,
+        payment_id: payment.id,
         type: "payment",
         amount: Number(form.amount),
         transaction_date:
           form.payment_date || null,
         description:
           `Payment received via ${form.payment_method}`,
-        created_by:
-          user?.id || null
+        created_by: user?.id || null
       });
 
     setModal(false);
@@ -2152,10 +2174,9 @@ function Payments({ businessId }) {
       invoice_id: "",
       customer_id: "",
       amount: "",
-      payment_date:
-        new Date()
-          .toISOString()
-          .slice(0, 10),
+      payment_date: new Date()
+        .toISOString()
+        .slice(0, 10),
       payment_method: "Cash",
       reference_number: "",
       notes: ""
@@ -2164,24 +2185,44 @@ function Payments({ businessId }) {
     load();
   }
 
+  async function remove(payment) {
+    if (!confirm("Delete this payment?")) return;
+
+    const { error } = await supabase
+      .from("payments")
+      .delete()
+      .eq("id", payment.id);
+
+    if (error) {
+      setError(error.message);
+      return;
+    }
+
+    await supabase
+      .from("transactions")
+      .delete()
+      .eq("payment_id", payment.id);
+
+    load();
+  }
+
   return (
     <Page
       heading="Payments"
       eyebrow="COLLECTIONS"
-      sub="Record customer payments and update invoice payment status."
+      sub="Record and manage customer payments."
       action={
-        <button
-          onClick={() => {
-            setError("");
-            setModal(true);
-          }}
-        >
+        <button onClick={() => setModal(true)}>
           <Plus />
           Record Payment
         </button>
       }
     >
       <section className="panel">
+        {error && (
+          <div className="error">{error}</div>
+        )}
+
         <div className="table">
           <table>
             <thead>
@@ -2191,60 +2232,55 @@ function Payments({ businessId }) {
                 <th>Invoice</th>
                 <th>Amount</th>
                 <th>Method</th>
-                <th>Reference</th>
+                <th></th>
               </tr>
             </thead>
 
             <tbody>
-              {loading ? (
-                <tr>
-                  <td colSpan="6">
-                    Loading...
-                  </td>
-                </tr>
-              ) : list.length === 0 ? (
+              {list.length === 0 ? (
                 <tr>
                   <td colSpan="6">
                     No payments yet.
                   </td>
                 </tr>
               ) : (
-                list.map((payment) => (
-                  <tr key={payment.id}>
+                list.map((item) => (
+                  <tr key={item.id}>
                     <td>
-                      {dateIn(
-                        payment.payment_date
-                      )}
+                      {dateIn(item.payment_date)}
                     </td>
 
                     <td>
                       {customerNames[
-                        payment.customer_id
+                        item.customer_id
                       ] || "—"}
                     </td>
 
                     <td>
                       {invoiceNames[
-                        payment.invoice_id
+                        item.invoice_id
                       ] || "—"}
                     </td>
 
                     <td>
                       <strong>
-                        {money(
-                          payment.amount
-                        )}
+                        {money(item.amount)}
                       </strong>
                     </td>
 
                     <td>
-                      {payment.payment_method ||
-                        "—"}
+                      {item.payment_method || "—"}
                     </td>
 
                     <td>
-                      {payment.reference_number ||
-                        "—"}
+                      <button
+                        className="icon danger"
+                        onClick={() =>
+                          remove(item)
+                        }
+                      >
+                        <Trash2 />
+                      </button>
                     </td>
                   </tr>
                 ))
@@ -2269,36 +2305,22 @@ function Payments({ businessId }) {
               <select
                 value={form.invoice_id}
                 onChange={(e) =>
-                  selectInvoice(
-                    e.target.value
-                  )
+                  selectInvoice(e.target.value)
                 }
               >
                 <option value="">
                   Select invoice
-                  (optional)
                 </option>
 
-                {invoices.map(
-                  (invoice) => (
-                    <option
-                      key={invoice.id}
-                      value={invoice.id}
-                    >
-                      {
-                        invoice.invoice_number
-                      }{" "}
-                      —{" "}
-                      {customerNames[
-                        invoice.customer_id
-                      ] || "Customer"}{" "}
-                      —{" "}
-                      {money(
-                        invoice.total_amount
-                      )}
-                    </option>
-                  )
-                )}
+                {invoices.map((x) => (
+                  <option
+                    key={x.id}
+                    value={x.id}
+                  >
+                    {x.invoice_number} —{" "}
+                    {money(x.total_amount)}
+                  </option>
+                ))}
               </select>
             </label>
 
@@ -2306,9 +2328,7 @@ function Payments({ businessId }) {
               <span>Customer</span>
 
               <select
-                value={
-                  form.customer_id
-                }
+                value={form.customer_id}
                 onChange={(e) =>
                   setForm({
                     ...form,
@@ -2321,16 +2341,14 @@ function Payments({ businessId }) {
                   Select customer
                 </option>
 
-                {customers.map(
-                  (customer) => (
-                    <option
-                      key={customer.id}
-                      value={customer.id}
-                    >
-                      {customer.name}
-                    </option>
-                  )
-                )}
+                {customers.map((x) => (
+                  <option
+                    key={x.id}
+                    value={x.id}
+                  >
+                    {x.name}
+                  </option>
+                ))}
               </select>
             </label>
 
@@ -2338,10 +2356,10 @@ function Payments({ businessId }) {
               label="Amount *"
               type="number"
               value={form.amount}
-              onChange={(value) =>
+              onChange={(v) =>
                 setForm({
                   ...form,
-                  amount: value
+                  amount: v
                 })
               }
             />
@@ -2349,27 +2367,20 @@ function Payments({ businessId }) {
             <Field
               label="Payment Date"
               type="date"
-              value={
-                form.payment_date
-              }
-              onChange={(value) =>
+              value={form.payment_date}
+              onChange={(v) =>
                 setForm({
                   ...form,
-                  payment_date:
-                    value
+                  payment_date: v
                 })
               }
             />
 
             <label className="field">
-              <span>
-                Payment Method
-              </span>
+              <span>Payment Method</span>
 
               <select
-                value={
-                  form.payment_method
-                }
+                value={form.payment_method}
                 onChange={(e) =>
                   setForm({
                     ...form,
@@ -2380,9 +2391,7 @@ function Payments({ businessId }) {
               >
                 <option>Cash</option>
                 <option>UPI</option>
-                <option>
-                  Bank Transfer
-                </option>
+                <option>Bank Transfer</option>
                 <option>Cheque</option>
                 <option>Other</option>
               </select>
@@ -2390,14 +2399,11 @@ function Payments({ businessId }) {
 
             <Field
               label="Reference Number"
-              value={
-                form.reference_number
-              }
-              onChange={(value) =>
+              value={form.reference_number}
+              onChange={(v) =>
                 setForm({
                   ...form,
-                  reference_number:
-                    value
+                  reference_number: v
                 })
               }
             />
@@ -2405,10 +2411,10 @@ function Payments({ businessId }) {
             <Field
               label="Notes"
               value={form.notes}
-              onChange={(value) =>
+              onChange={(v) =>
                 setForm({
                   ...form,
-                  notes: value
+                  notes: v
                 })
               }
               wide
@@ -2425,9 +2431,7 @@ function Payments({ businessId }) {
               <button
                 type="button"
                 className="secondary"
-                onClick={() =>
-                  setModal(false)
-                }
+                onClick={() => setModal(false)}
               >
                 Cancel
               </button>
@@ -2447,31 +2451,17 @@ function Payments({ businessId }) {
    TRANSACTIONS
 ========================================================= */
 
-function Transactions({
-  businessId
-}) {
-  const [list, setList] =
-    useState([]);
-
-  const [customers, setCustomers] =
-    useState([]);
-
-  const [invoices, setInvoices] =
-    useState([]);
-
-  const [query, setQuery] =
-    useState("");
-
-  const [loading, setLoading] =
-    useState(true);
-
-  const [error, setError] =
-    useState("");
+function Transactions({ businessId }) {
+  const [list, setList] = useState([]);
+  const [customers, setCustomers] = useState([]);
+  const [invoices, setInvoices] = useState([]);
+  const [query, setQuery] = useState("");
+  const [modal, setModal] = useState(false);
+  const [error, setError] = useState("");
+  const [form, setForm] =
+    useState(emptyTransaction);
 
   async function load() {
-    setLoading(true);
-    setError("");
-
     const [
       transactionResult,
       customerResult,
@@ -2492,84 +2482,50 @@ function Transactions({
 
       supabase
         .from("invoices")
-        .select(
-          "id,invoice_number"
-        )
-        .eq(
-          "business_id",
-          businessId
-        )
+        .select("id,invoice_number")
+        .eq("business_id", businessId)
     ]);
 
-    if (transactionResult.error) {
+    if (transactionResult.error)
       setError(
         transactionResult.error.message
       );
-    }
 
-    setList(
-      transactionResult.data || []
-    );
-
-    setCustomers(
-      customerResult.data || []
-    );
-
-    setInvoices(
-      invoiceResult.data || []
-    );
-
-    setLoading(false);
+    setList(transactionResult.data || []);
+    setCustomers(customerResult.data || []);
+    setInvoices(invoiceResult.data || []);
   }
 
   useEffect(() => {
-    if (businessId) {
-      load();
-    }
+    if (businessId) load();
   }, [businessId]);
 
-  const customerNames =
-    Object.fromEntries(
-      customers.map((customer) => [
-        customer.id,
-        customer.name
-      ])
-    );
+  const customerNames = Object.fromEntries(
+    customers.map((x) => [x.id, x.name])
+  );
 
-  const invoiceNames =
-    Object.fromEntries(
-      invoices.map((invoice) => [
-        invoice.id,
-        invoice.invoice_number
-      ])
-    );
+  const invoiceNames = Object.fromEntries(
+    invoices.map((x) => [
+      x.id,
+      x.invoice_number
+    ])
+  );
 
   const filtered = useMemo(() => {
-    const q = query
-      .toLowerCase()
-      .trim();
+    const q = query.toLowerCase().trim();
 
-    if (!q) {
-      return list;
-    }
+    if (!q) return list;
 
-    return list.filter(
-      (transaction) =>
-        [
-          transaction.type,
-          transaction.description,
-          transaction.amount,
-          customerNames[
-            transaction.customer_id
-          ],
-          invoiceNames[
-            transaction.invoice_id
-          ]
-        ].some((value) =>
-          String(value || "")
-            .toLowerCase()
-            .includes(q)
-        )
+    return list.filter((x) =>
+      [
+        x.type,
+        x.description,
+        x.amount,
+        customerNames[x.customer_id],
+        invoiceNames[x.invoice_id]
+      ].some((v) =>
+        String(v || "").toLowerCase().includes(q)
+      )
     );
   }, [
     list,
@@ -2578,25 +2534,68 @@ function Transactions({
     invoiceNames
   ]);
 
-  const total =
-    filtered.reduce(
-      (sum, transaction) =>
-        sum +
-        Number(
-          transaction.amount || 0
-        ),
-      0
-    );
+  async function save(e) {
+    e.preventDefault();
+    setError("");
+
+    if (Number(form.amount) <= 0) {
+      setError("Enter a valid amount.");
+      return;
+    }
+
+    const {
+      data: { user }
+    } = await supabase.auth.getUser();
+
+    const { error } = await supabase
+      .from("transactions")
+      .insert({
+        business_id: businessId,
+        customer_id:
+          form.customer_id || null,
+        invoice_id:
+          form.invoice_id || null,
+        type: form.type,
+        amount: Number(form.amount),
+        transaction_date:
+          form.transaction_date || null,
+        description:
+          form.description || null,
+        created_by: user?.id || null
+      });
+
+    if (error) {
+      setError(error.message);
+      return;
+    }
+
+    setModal(false);
+    setForm({ ...emptyTransaction });
+    load();
+  }
+
+  async function remove(item) {
+    if (!confirm("Delete this transaction?"))
+      return;
+
+    const { error } = await supabase
+      .from("transactions")
+      .delete()
+      .eq("id", item.id);
+
+    if (error) setError(error.message);
+    else load();
+  }
 
   return (
     <Page
       heading="Transactions"
       eyebrow="LEDGER"
-      sub="Complete transaction history for the business."
+      sub="Complete business transaction history."
       action={
-        <button onClick={load}>
-          <RefreshCw />
-          Refresh
+        <button onClick={() => setModal(true)}>
+          <Plus />
+          Add Transaction
         </button>
       }
     >
@@ -2604,298 +2603,81 @@ function Transactions({
         <Toolbar
           query={query}
           setQuery={setQuery}
-          placeholder="Search type, customer, invoice or description..."
+          placeholder="Search transaction..."
           count={`${filtered.length} transaction${
-            filtered.length !== 1
-              ? "s"
-              : ""
-          } • ${money(total)}`}
+            filtered.length !== 1 ? "s" : ""
+          }`}
         />
 
         {error && (
-          <div className="error">
-            {error}
-          </div>
+          <div className="error">{error}</div>
         )}
 
-        {loading ? (
-          <Empty text="Loading transactions..." />
-        ) : filtered.length === 0 ? (
-          <Empty
-            icon={ArrowLeftRight}
-            title="No transactions yet"
-            text="Transactions will appear here as payments and other ledger entries are recorded."
-          />
-        ) : (
-          <DataTable
-            headers={[
-              "Date",
-              "Type",
-              "Customer",
-              "Invoice",
-              "Description",
-              "Amount"
-            ]}
-            rows={filtered.map(
-              (transaction) => [
-                dateIn(
-                  transaction.transaction_date
-                ),
-
-                <Status
-                  text={
-                    transaction.type
-                  }
-                />,
-
-                customerNames[
-                  transaction.customer_id
-                ] || "—",
-
-                invoiceNames[
-                  transaction.invoice_id
-                ] || "—",
-
-                transaction.description ||
-                  "—",
-
-                <strong>
-                  {money(
-                    transaction.amount
-                  )}
-                </strong>
-              ]
-            )}
-          />
-        )}
-      </section>
-    </Page>
-  );
-}
-
-/* =========================================================
-   EXPENSES
-========================================================= */
-
-function Expenses({
-  businessId
-}) {
-  const [list, setList] =
-    useState([]);
-
-  const [categories, setCategories] =
-    useState([]);
-
-  const [form, setForm] =
-    useState(emptyExpense);
-
-  const [modal, setModal] =
-    useState(false);
-
-  const [error, setError] =
-    useState("");
-
-  const [loading, setLoading] =
-    useState(true);
-
-  async function load() {
-    setLoading(true);
-
-    const [
-      expenseResult,
-      categoryResult
-    ] = await Promise.all([
-      supabase
-        .from("expenses")
-        .select("*")
-        .eq("business_id", businessId)
-        .order("expense_date", {
-          ascending: false
-        }),
-
-      supabase
-        .from("expense_categories")
-        .select("*")
-        .eq("business_id", businessId)
-        .order("name")
-    ]);
-
-    if (expenseResult.error) {
-      setError(
-        expenseResult.error.message
-      );
-    }
-
-    setList(
-      expenseResult.data || []
-    );
-
-    setCategories(
-      categoryResult.data || []
-    );
-
-    setLoading(false);
-  }
-
-  useEffect(() => {
-    if (businessId) {
-      load();
-    }
-  }, [businessId]);
-
-  async function save(e) {
-    e.preventDefault();
-
-    setError("");
-
-    if (
-      !form.description.trim() ||
-      Number(form.amount) <= 0
-    ) {
-      setError(
-        "Description and valid amount are required."
-      );
-
-      return;
-    }
-
-    const {
-      data: { user }
-    } =
-      await supabase.auth.getUser();
-
-    const payload = {
-      ...form,
-      business_id: businessId,
-      category_id:
-        form.category_id || null,
-      amount: Number(form.amount),
-      created_by:
-        user?.id || null
-    };
-
-    const { error } =
-      await supabase
-        .from("expenses")
-        .insert(payload);
-
-    if (error) {
-      setError(error.message);
-      return;
-    }
-
-    /* -----------------------------------------
-       Add expense to transactions
-    ----------------------------------------- */
-
-    await supabase
-      .from("transactions")
-      .insert({
-        business_id: businessId,
-        type: "expense",
-        amount: Number(form.amount),
-        transaction_date:
-          form.expense_date || null,
-        description:
-          form.description,
-        created_by:
-          user?.id || null
-      });
-
-    setModal(false);
-
-    setForm(emptyExpense);
-
-    load();
-  }
-
-  const categoryNames =
-    Object.fromEntries(
-      categories.map((category) => [
-        category.id,
-        category.name
-      ])
-    );
-
-  return (
-    <Page
-      heading="Expenses"
-      eyebrow="EXPENSE MANAGEMENT"
-      sub="Record business expenses and operating costs."
-      action={
-        <button
-          onClick={() => {
-            setError("");
-            setModal(true);
-          }}
-        >
-          <Plus />
-          Add Expense
-        </button>
-      }
-    >
-      <section className="panel">
         <div className="table">
           <table>
             <thead>
               <tr>
                 <th>Date</th>
-                <th>Category</th>
+                <th>Type</th>
+                <th>Customer</th>
+                <th>Invoice</th>
                 <th>Description</th>
                 <th>Amount</th>
-                <th>Method</th>
-                <th>Reference</th>
+                <th></th>
               </tr>
             </thead>
 
             <tbody>
-              {loading ? (
+              {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan="6">
-                    Loading...
-                  </td>
-                </tr>
-              ) : list.length === 0 ? (
-                <tr>
-                  <td colSpan="6">
-                    No expenses yet.
+                  <td colSpan="7">
+                    No transactions yet.
                   </td>
                 </tr>
               ) : (
-                list.map((expense) => (
-                  <tr key={expense.id}>
+                filtered.map((item) => (
+                  <tr key={item.id}>
                     <td>
                       {dateIn(
-                        expense.expense_date
+                        item.transaction_date
                       )}
                     </td>
 
                     <td>
-                      {categoryNames[
-                        expense.category_id
+                      <Status text={item.type} />
+                    </td>
+
+                    <td>
+                      {customerNames[
+                        item.customer_id
                       ] || "—"}
                     </td>
 
                     <td>
-                      {expense.description}
+                      {invoiceNames[
+                        item.invoice_id
+                      ] || "—"}
+                    </td>
+
+                    <td>
+                      {item.description || "—"}
                     </td>
 
                     <td>
                       <strong>
-                        {money(
-                          expense.amount
-                        )}
+                        {money(item.amount)}
                       </strong>
                     </td>
 
                     <td>
-                      {expense.payment_method ||
-                        "—"}
-                    </td>
-
-                    <td>
-                      {expense.reference_number ||
-                        "—"}
+                      <button
+                        className="icon danger"
+                        onClick={() =>
+                          remove(item)
+                        }
+                      >
+                        <Trash2 />
+                      </button>
                     </td>
                   </tr>
                 ))
@@ -2907,10 +2689,493 @@ function Expenses({
 
       {modal && (
         <Modal
-          title="Add Expense"
-          onClose={() =>
-            setModal(false)
+          title="Add Transaction"
+          onClose={() => setModal(false)}
+        >
+          <form
+            className="grid"
+            onSubmit={save}
+          >
+            <label className="field">
+              <span>Type</span>
+
+              <select
+                value={form.type}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    type: e.target.value
+                  })
+                }
+              >
+                <option value="income">
+                  Income
+                </option>
+
+                <option value="expense">
+                  Expense
+                </option>
+
+                <option value="adjustment">
+                  Adjustment
+                </option>
+              </select>
+            </label>
+
+            <Field
+              label="Amount *"
+              type="number"
+              value={form.amount}
+              onChange={(v) =>
+                setForm({
+                  ...form,
+                  amount: v
+                })
+              }
+            />
+
+            <Field
+              label="Date"
+              type="date"
+              value={form.transaction_date}
+              onChange={(v) =>
+                setForm({
+                  ...form,
+                  transaction_date: v
+                })
+              }
+            />
+
+            <label className="field">
+              <span>Customer</span>
+
+              <select
+                value={form.customer_id}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    customer_id:
+                      e.target.value
+                  })
+                }
+              >
+                <option value="">
+                  None
+                </option>
+
+                {customers.map((x) => (
+                  <option
+                    key={x.id}
+                    value={x.id}
+                  >
+                    {x.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="field">
+              <span>Invoice</span>
+
+              <select
+                value={form.invoice_id}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    invoice_id:
+                      e.target.value
+                  })
+                }
+              >
+                <option value="">
+                  None
+                </option>
+
+                {invoices.map((x) => (
+                  <option
+                    key={x.id}
+                    value={x.id}
+                  >
+                    {x.invoice_number}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <Field
+              label="Description"
+              value={form.description}
+              onChange={(v) =>
+                setForm({
+                  ...form,
+                  description: v
+                })
+              }
+            />
+
+            {error && (
+              <div className="error wide">
+                {error}
+              </div>
+            )}
+
+            <div className="actions wide">
+              <button
+                type="button"
+                className="secondary"
+                onClick={() => setModal(false)}
+              >
+                Cancel
+              </button>
+
+              <button>
+                Save Transaction
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
+    </Page>
+  );
+}
+
+/* =========================================================
+   EXPENSES + CATEGORIES
+========================================================= */
+
+function Expenses({ businessId }) {
+  const [list, setList] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [modal, setModal] = useState(null);
+  const [categoryModal, setCategoryModal] =
+    useState(false);
+
+  const [form, setForm] =
+    useState(emptyExpense);
+
+  const [categoryName, setCategoryName] =
+    useState("");
+
+  const [error, setError] = useState("");
+
+  async function load() {
+    const [expenseResult, categoryResult] =
+      await Promise.all([
+        supabase
+          .from("expenses")
+          .select("*")
+          .eq("business_id", businessId)
+          .order("expense_date", {
+            ascending: false
+          }),
+
+        supabase
+          .from("expense_categories")
+          .select("*")
+          .eq("business_id", businessId)
+          .order("name")
+      ]);
+
+    if (expenseResult.error)
+      setError(expenseResult.error.message);
+
+    setList(expenseResult.data || []);
+    setCategories(categoryResult.data || []);
+  }
+
+  useEffect(() => {
+    if (businessId) load();
+  }, [businessId]);
+
+  const categoryNames = Object.fromEntries(
+    categories.map((x) => [x.id, x.name])
+  );
+
+  function openNew() {
+    setForm({
+      ...emptyExpense,
+      expense_date: new Date()
+        .toISOString()
+        .slice(0, 10)
+    });
+
+    setError("");
+    setModal("new");
+  }
+
+  function openEdit(item) {
+    setForm({
+      ...emptyExpense,
+      ...item
+    });
+
+    setError("");
+    setModal("edit");
+  }
+
+  async function save(e) {
+    e.preventDefault();
+    setError("");
+
+    if (
+      !form.description.trim() ||
+      Number(form.amount) <= 0
+    ) {
+      setError(
+        "Description and valid amount are required."
+      );
+      return;
+    }
+
+    const {
+      data: { user }
+    } = await supabase.auth.getUser();
+
+    const payload = {
+      business_id: businessId,
+      category_id:
+        form.category_id || null,
+      description: form.description.trim(),
+      amount: Number(form.amount),
+      expense_date:
+        form.expense_date || null,
+      payment_method:
+        form.payment_method || null,
+      reference_number:
+        form.reference_number || null,
+      notes: form.notes || null,
+      created_by:
+        form.created_by || user?.id || null
+    };
+
+    let expense;
+    let expenseError;
+
+    if (form.id) {
+      const result = await supabase
+        .from("expenses")
+        .update(payload)
+        .eq("id", form.id)
+        .select()
+        .single();
+
+      expense = result.data;
+      expenseError = result.error;
+    } else {
+      const result = await supabase
+        .from("expenses")
+        .insert(payload)
+        .select()
+        .single();
+
+      expense = result.data;
+      expenseError = result.error;
+    }
+
+    if (expenseError) {
+      setError(expenseError.message);
+      return;
+    }
+
+    if (!form.id) {
+      await supabase
+        .from("transactions")
+        .insert({
+          business_id: businessId,
+          type: "expense",
+          amount: Number(form.amount),
+          transaction_date:
+            form.expense_date || null,
+          description:
+            form.description.trim(),
+          created_by:
+            user?.id || null
+        });
+    }
+
+    setModal(null);
+    load();
+  }
+
+  async function remove(item) {
+    if (
+      !confirm(
+        `Delete expense "${item.description}"?`
+      )
+    ) {
+      return;
+    }
+
+    const { error } = await supabase
+      .from("expenses")
+      .delete()
+      .eq("id", item.id);
+
+    if (error) {
+      setError(error.message);
+      return;
+    }
+
+    load();
+  }
+
+  async function addCategory(e) {
+    e.preventDefault();
+
+    if (!categoryName.trim()) return;
+
+    const { error } = await supabase
+      .from("expense_categories")
+      .insert({
+        business_id: businessId,
+        name: categoryName.trim()
+      });
+
+    if (error) {
+      setError(error.message);
+      return;
+    }
+
+    setCategoryName("");
+    setCategoryModal(false);
+    load();
+  }
+
+  async function removeCategory(item) {
+    if (
+      !confirm(
+        `Delete category "${item.name}"?`
+      )
+    ) {
+      return;
+    }
+
+    const { error } = await supabase
+      .from("expense_categories")
+      .delete()
+      .eq("id", item.id);
+
+    if (error) {
+      setError(error.message);
+      return;
+    }
+
+    load();
+  }
+
+  return (
+    <Page
+      heading="Expenses"
+      eyebrow="EXPENSE MANAGEMENT"
+      sub="Record expenses and manage expense categories."
+      action={
+        <div style={{ display: "flex", gap: "8px" }}>
+          <button
+            className="secondary"
+            onClick={() =>
+              setCategoryModal(true)
+            }
+          >
+            <FolderPlus />
+            Categories
+          </button>
+
+          <button onClick={openNew}>
+            <Plus />
+            Add Expense
+          </button>
+        </div>
+      }
+    >
+      <section className="panel">
+        {error && (
+          <div className="error">{error}</div>
+        )}
+
+        <div className="table">
+          <table>
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Category</th>
+                <th>Description</th>
+                <th>Amount</th>
+                <th>Method</th>
+                <th></th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {list.length === 0 ? (
+                <tr>
+                  <td colSpan="6">
+                    No expenses yet.
+                  </td>
+                </tr>
+              ) : (
+                list.map((item) => (
+                  <tr key={item.id}>
+                    <td>
+                      {dateIn(
+                        item.expense_date
+                      )}
+                    </td>
+
+                    <td>
+                      {categoryNames[
+                        item.category_id
+                      ] || "—"}
+                    </td>
+
+                    <td>
+                      {item.description}
+                    </td>
+
+                    <td>
+                      <strong>
+                        {money(item.amount)}
+                      </strong>
+                    </td>
+
+                    <td>
+                      {item.payment_method || "—"}
+                    </td>
+
+                    <td>
+                      <button
+                        className="icon"
+                        onClick={() =>
+                          openEdit(item)
+                        }
+                      >
+                        <Pencil />
+                      </button>
+
+                      <button
+                        className="icon danger"
+                        onClick={() =>
+                          remove(item)
+                        }
+                      >
+                        <Trash2 />
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      {modal && (
+        <Modal
+          title={
+            modal === "edit"
+              ? "Edit Expense"
+              : "Add Expense"
           }
+          onClose={() => setModal(null)}
         >
           <form
             className="grid"
@@ -2920,9 +3185,7 @@ function Expenses({
               <span>Category</span>
 
               <select
-                value={
-                  form.category_id
-                }
+                value={form.category_id}
                 onChange={(e) =>
                   setForm({
                     ...form,
@@ -2935,27 +3198,24 @@ function Expenses({
                   Select category
                 </option>
 
-                {categories.map(
-                  (category) => (
-                    <option
-                      key={category.id}
-                      value={category.id}
-                    >
-                      {category.name}
-                    </option>
-                  )
-                )}
+                {categories.map((x) => (
+                  <option
+                    key={x.id}
+                    value={x.id}
+                  >
+                    {x.name}
+                  </option>
+                ))}
               </select>
             </label>
 
             <Field
               label="Description *"
               value={form.description}
-              onChange={(value) =>
+              onChange={(v) =>
                 setForm({
                   ...form,
-                  description:
-                    value
+                  description: v
                 })
               }
             />
@@ -2964,10 +3224,10 @@ function Expenses({
               label="Amount *"
               type="number"
               value={form.amount}
-              onChange={(value) =>
+              onChange={(v) =>
                 setForm({
                   ...form,
-                  amount: value
+                  amount: v
                 })
               }
             />
@@ -2975,27 +3235,20 @@ function Expenses({
             <Field
               label="Date"
               type="date"
-              value={
-                form.expense_date
-              }
-              onChange={(value) =>
+              value={form.expense_date}
+              onChange={(v) =>
                 setForm({
                   ...form,
-                  expense_date:
-                    value
+                  expense_date: v
                 })
               }
             />
 
             <label className="field">
-              <span>
-                Payment Method
-              </span>
+              <span>Payment Method</span>
 
               <select
-                value={
-                  form.payment_method
-                }
+                value={form.payment_method}
                 onChange={(e) =>
                   setForm({
                     ...form,
@@ -3006,9 +3259,7 @@ function Expenses({
               >
                 <option>Cash</option>
                 <option>UPI</option>
-                <option>
-                  Bank Transfer
-                </option>
+                <option>Bank Transfer</option>
                 <option>Cheque</option>
                 <option>Other</option>
               </select>
@@ -3016,14 +3267,11 @@ function Expenses({
 
             <Field
               label="Reference Number"
-              value={
-                form.reference_number
-              }
-              onChange={(value) =>
+              value={form.reference_number}
+              onChange={(v) =>
                 setForm({
                   ...form,
-                  reference_number:
-                    value
+                  reference_number: v
                 })
               }
             />
@@ -3031,10 +3279,10 @@ function Expenses({
             <Field
               label="Notes"
               value={form.notes}
-              onChange={(value) =>
+              onChange={(v) =>
                 setForm({
                   ...form,
-                  notes: value
+                  notes: v
                 })
               }
               wide
@@ -3051,9 +3299,7 @@ function Expenses({
               <button
                 type="button"
                 className="secondary"
-                onClick={() =>
-                  setModal(false)
-                }
+                onClick={() => setModal(null)}
               >
                 Cancel
               </button>
@@ -3063,6 +3309,75 @@ function Expenses({
               </button>
             </div>
           </form>
+        </Modal>
+      )}
+
+      {categoryModal && (
+        <Modal
+          title="Expense Categories"
+          onClose={() =>
+            setCategoryModal(false)
+          }
+        >
+          <form
+            className="grid"
+            onSubmit={addCategory}
+          >
+            <Field
+              label="New Category"
+              value={categoryName}
+              onChange={setCategoryName}
+              wide
+              placeholder="Transport, Electricity, Salary..."
+            />
+
+            <div className="actions wide">
+              <button
+                type="button"
+                className="secondary"
+                onClick={() =>
+                  setCategoryModal(false)
+                }
+              >
+                Close
+              </button>
+
+              <button>
+                <Plus />
+                Add Category
+              </button>
+            </div>
+          </form>
+
+          <div className="table">
+            <table>
+              <thead>
+                <tr>
+                  <th>Category</th>
+                  <th></th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {categories.map((item) => (
+                  <tr key={item.id}>
+                    <td>{item.name}</td>
+
+                    <td>
+                      <button
+                        className="icon danger"
+                        onClick={() =>
+                          removeCategory(item)
+                        }
+                      >
+                        <Trash2 />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </Modal>
       )}
     </Page>
@@ -3078,13 +3393,12 @@ function Dashboard({
   customerCount,
   productCount
 }) {
-  const [stats, setStats] =
-    useState({
-      sales: 0,
-      paid: 0,
-      expenses: 0,
-      invoices: 0
-    });
+  const [stats, setStats] = useState({
+    sales: 0,
+    paid: 0,
+    expenses: 0,
+    invoices: 0
+  });
 
   async function load() {
     const [
@@ -3094,88 +3408,73 @@ function Dashboard({
     ] = await Promise.all([
       supabase
         .from("invoices")
-        .select(
-          "total_amount"
-        )
-        .eq(
-          "business_id",
-          businessId
-        )
-        .neq(
-          "status",
-          "cancelled"
-        ),
+        .select("total_amount")
+        .eq("business_id", businessId)
+        .neq("status", "cancelled"),
 
       supabase
         .from("payments")
         .select("amount")
-        .eq(
-          "business_id",
-          businessId
-        ),
+        .eq("business_id", businessId),
 
       supabase
         .from("expenses")
         .select("amount")
-        .eq(
-          "business_id",
-          businessId
-        )
+        .eq("business_id", businessId)
     ]);
 
-    const invoices =
-      invoiceResult.data || [];
+    const sales =
+      (invoiceResult.data || []).reduce(
+        (s, x) =>
+          s + Number(x.total_amount || 0),
+        0
+      );
 
-    const payments =
-      paymentResult.data || [];
+    const paid =
+      (paymentResult.data || []).reduce(
+        (s, x) =>
+          s + Number(x.amount || 0),
+        0
+      );
 
     const expenses =
-      expenseResult.data || [];
+      (expenseResult.data || []).reduce(
+        (s, x) =>
+          s + Number(x.amount || 0),
+        0
+      );
 
     setStats({
-      sales: invoices.reduce(
-        (sum, invoice) =>
-          sum +
-          Number(
-            invoice.total_amount || 0
-          ),
-        0
-      ),
-
-      paid: payments.reduce(
-        (sum, payment) =>
-          sum +
-          Number(
-            payment.amount || 0
-          ),
-        0
-      ),
-
-      expenses: expenses.reduce(
-        (sum, expense) =>
-          sum +
-          Number(
-            expense.amount || 0
-          ),
-        0
-      ),
-
+      sales,
+      paid,
+      expenses,
       invoices:
-        invoices.length
+        invoiceResult.data?.length || 0
     });
   }
 
   useEffect(() => {
-    if (businessId) {
-      load();
-    }
+    if (businessId) load();
   }, [businessId]);
+
+  const Stat = ({ title, value }) => (
+    <div className="stat">
+      <small>{title}</small>
+      <strong>{value}</strong>
+    </div>
+  );
 
   return (
     <Page
       heading="Dashboard"
       eyebrow="OVERVIEW"
       sub="Neelkanth Stones business snapshot."
+      action={
+        <button onClick={load}>
+          <RefreshCw />
+          Refresh
+        </button>
+      }
     >
       <div className="stats">
         <Stat
@@ -3203,17 +3502,14 @@ function Dashboard({
           value={money(
             Math.max(
               0,
-              stats.sales -
-                stats.paid
+              stats.sales - stats.paid
             )
           )}
         />
 
         <Stat
           title="Expenses"
-          value={money(
-            stats.expenses
-          )}
+          value={money(stats.expenses)}
         />
 
         <Stat
@@ -3224,8 +3520,7 @@ function Dashboard({
         <Stat
           title="Net Cash"
           value={money(
-            stats.paid -
-              stats.expenses
+            stats.paid - stats.expenses
           )}
         />
       </div>
@@ -3237,12 +3532,10 @@ function Dashboard({
           Live business dashboard
         </strong>
 
-        <p>
-          Sales, collections,
-          invoices and expenses
-          are connected with
-          Supabase.
-        </p>
+        <span>
+          Sales, payments, expenses and
+          invoices are connected to Supabase.
+        </span>
       </section>
     </Page>
   );
@@ -3252,23 +3545,15 @@ function Dashboard({
    REPORTS
 ========================================================= */
 
-function Reports({
-  businessId
-}) {
-  const [data, setData] =
-    useState({
-      sales: 0,
-      paid: 0,
-      expenses: 0,
-      invoiceCount: 0
-    });
-
-  const [loading, setLoading] =
-    useState(true);
+function Reports({ businessId }) {
+  const [data, setData] = useState({
+    sales: 0,
+    paid: 0,
+    expenses: 0,
+    invoices: 0
+  });
 
   async function load() {
-    setLoading(true);
-
     const [
       invoiceResult,
       paymentResult,
@@ -3277,59 +3562,38 @@ function Reports({
       supabase
         .from("invoices")
         .select("total_amount")
-        .eq(
-          "business_id",
-          businessId
-        )
-        .neq(
-          "status",
-          "cancelled"
-        ),
+        .eq("business_id", businessId)
+        .neq("status", "cancelled"),
 
       supabase
         .from("payments")
         .select("amount")
-        .eq(
-          "business_id",
-          businessId
-        ),
+        .eq("business_id", businessId),
 
       supabase
         .from("expenses")
         .select("amount")
-        .eq(
-          "business_id",
-          businessId
-        )
+        .eq("business_id", businessId)
     ]);
 
     const sales =
       (invoiceResult.data || []).reduce(
-        (sum, invoice) =>
-          sum +
-          Number(
-            invoice.total_amount || 0
-          ),
+        (s, x) =>
+          s + Number(x.total_amount || 0),
         0
       );
 
     const paid =
       (paymentResult.data || []).reduce(
-        (sum, payment) =>
-          sum +
-          Number(
-            payment.amount || 0
-          ),
+        (s, x) =>
+          s + Number(x.amount || 0),
         0
       );
 
     const expenses =
       (expenseResult.data || []).reduce(
-        (sum, expense) =>
-          sum +
-          Number(
-            expense.amount || 0
-          ),
+        (s, x) =>
+          s + Number(x.amount || 0),
         0
       );
 
@@ -3337,76 +3601,57 @@ function Reports({
       sales,
       paid,
       expenses,
-      invoiceCount:
-        invoiceResult.data?.length ||
-        0
+      invoices:
+        invoiceResult.data?.length || 0
     });
-
-    setLoading(false);
   }
 
   useEffect(() => {
-    if (businessId) {
-      load();
-    }
+    if (businessId) load();
   }, [businessId]);
 
   return (
     <Page
       heading="Reports"
       eyebrow="BUSINESS REPORTS"
-      sub="Live summary from invoices, payments and expenses."
+      sub="Live financial summary."
+      action={
+        <button onClick={load}>
+          <RefreshCw />
+          Refresh
+        </button>
+      }
     >
       <div className="report-grid">
         {[
-          [
-            "Sales",
-            money(data.sales)
-          ],
-
+          ["Sales", money(data.sales)],
           [
             "Payments Received",
             money(data.paid)
           ],
-
           [
             "Expenses",
             money(data.expenses)
           ],
-
           [
             "Outstanding",
             money(
               Math.max(
                 0,
-                data.sales -
-                  data.paid
+                data.sales - data.paid
               )
             )
           ],
-
-          [
-            "Invoices",
-            data.invoiceCount
-          ]
-        ].map(
-          ([title, value]) => (
-            <div
-              className="report-card"
-              key={title}
-            >
-              <small>
-                {title}
-              </small>
-
-              <strong>
-                {loading
-                  ? "Loading..."
-                  : value}
-              </strong>
-            </div>
-          )
-        )}
+          ["Invoices", data.invoices]
+        ].map(([title, value]) => (
+          <div
+            className="report-card"
+            key={title}
+          >
+            <small>{title}</small>
+            <strong>{value}</strong>
+          </div>
+        ))}
       </div>
     </Page>
   );
@@ -3416,69 +3661,126 @@ function Reports({
    SETTINGS
 ========================================================= */
 
-function SettingsPage({
-  business
-}) {
-  const [form, setForm] =
+function SettingsPage({ business }) {
+  const [businessForm, setBusinessForm] =
     useState({
       name: business?.name || "",
       phone: business?.phone || "",
       email: business?.email || "",
-      address:
-        business?.address || "",
+      address: business?.address || "",
       city: business?.city || "",
-      state:
-        business?.state || "",
-      pincode:
-        business?.pincode || "",
-      gst_number:
-        business?.gst_number || ""
+      state: business?.state || "",
+      pincode: business?.pincode || "",
+      gst_number: business?.gst_number || ""
     });
 
-  const [message, setMessage] =
-    useState("");
+  const [invoiceForm, setInvoiceForm] =
+    useState({
+      invoice_prefix: "INV",
+      default_tax_rate: 0,
+      currency: "INR",
+      invoice_notes: "",
+      invoice_terms: ""
+    });
 
-  const [busy, setBusy] =
-    useState(false);
+  const [message, setMessage] = useState("");
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    setForm({
-      name: business?.name || "",
-      phone: business?.phone || "",
-      email: business?.email || "",
-      address:
-        business?.address || "",
-      city: business?.city || "",
-      state:
-        business?.state || "",
-      pincode:
-        business?.pincode || "",
-      gst_number:
-        business?.gst_number || ""
-    });
+    async function load() {
+      if (!business?.id) return;
+
+      const { data } = await supabase
+        .from("business_settings")
+        .select("*")
+        .eq("business_id", business.id)
+        .maybeSingle();
+
+      if (data) {
+        setInvoiceForm({
+          invoice_prefix:
+            data.invoice_prefix || "INV",
+          default_tax_rate:
+            data.default_tax_rate ?? 0,
+          currency:
+            data.currency || "INR",
+          invoice_notes:
+            data.invoice_notes || "",
+          invoice_terms:
+            data.invoice_terms || ""
+        });
+      }
+    }
+
+    load();
   }, [business]);
 
   async function save(e) {
     e.preventDefault();
 
+    if (!business?.id) return;
+
     setBusy(true);
     setMessage("");
 
-    const { error } =
+    const { error: businessError } =
       await supabase
         .from("businesses")
-        .update(form)
-        .eq(
-          "id",
-          business.id
-        );
+        .update(businessForm)
+        .eq("id", business.id);
+
+    if (businessError) {
+      setBusy(false);
+      setMessage(
+        businessError.message
+      );
+      return;
+    }
+
+    const { data: existing } =
+      await supabase
+        .from("business_settings")
+        .select("id")
+        .eq("business_id", business.id)
+        .maybeSingle();
+
+    let settingsError;
+
+    if (existing?.id) {
+      const result = await supabase
+        .from("business_settings")
+        .update({
+          ...invoiceForm,
+          business_id: business.id,
+          default_tax_rate:
+            Number(
+              invoiceForm.default_tax_rate || 0
+            )
+        })
+        .eq("id", existing.id);
+
+      settingsError = result.error;
+    } else {
+      const result = await supabase
+        .from("business_settings")
+        .insert({
+          ...invoiceForm,
+          business_id: business.id,
+          default_tax_rate:
+            Number(
+              invoiceForm.default_tax_rate || 0
+            )
+        });
+
+      settingsError = result.error;
+    }
 
     setBusy(false);
 
     setMessage(
-      error
-        ? error.message
-        : "Business details saved successfully."
+      settingsError
+        ? settingsError.message
+        : "Business settings saved successfully."
     );
   }
 
@@ -3486,7 +3788,7 @@ function SettingsPage({
     <Page
       heading="Settings"
       eyebrow="BUSINESS SETTINGS"
-      sub="Update Neelkanth Stones business information."
+      sub="Business and invoice configuration."
     >
       <section className="panel">
         <form
@@ -3495,55 +3797,55 @@ function SettingsPage({
         >
           <Field
             label="Business Name"
-            value={form.name}
-            onChange={(value) =>
-              setForm({
-                ...form,
-                name: value
+            value={businessForm.name}
+            onChange={(v) =>
+              setBusinessForm({
+                ...businessForm,
+                name: v
               })
             }
           />
 
           <Field
             label="Phone"
-            value={form.phone}
-            onChange={(value) =>
-              setForm({
-                ...form,
-                phone: value
+            value={businessForm.phone}
+            onChange={(v) =>
+              setBusinessForm({
+                ...businessForm,
+                phone: v
               })
             }
           />
 
           <Field
             label="Email"
-            value={form.email}
-            onChange={(value) =>
-              setForm({
-                ...form,
-                email: value
+            value={businessForm.email}
+            onChange={(v) =>
+              setBusinessForm({
+                ...businessForm,
+                email: v
               })
             }
           />
 
           <Field
             label="GST Number"
-            value={form.gst_number}
-            onChange={(value) =>
-              setForm({
-                ...form,
-                gst_number: value
+            value={businessForm.gst_number}
+            onChange={(v) =>
+              setBusinessForm({
+                ...businessForm,
+                gst_number: v
               })
             }
           />
 
           <Field
             label="Address"
-            value={form.address}
-            onChange={(value) =>
-              setForm({
-                ...form,
-                address: value
+            value={businessForm.address}
+            onChange={(v) =>
+              setBusinessForm({
+                ...businessForm,
+                address: v
               })
             }
             wide
@@ -3551,35 +3853,95 @@ function SettingsPage({
 
           <Field
             label="City"
-            value={form.city}
-            onChange={(value) =>
-              setForm({
-                ...form,
-                city: value
+            value={businessForm.city}
+            onChange={(v) =>
+              setBusinessForm({
+                ...businessForm,
+                city: v
               })
             }
           />
 
           <Field
             label="State"
-            value={form.state}
-            onChange={(value) =>
-              setForm({
-                ...form,
-                state: value
+            value={businessForm.state}
+            onChange={(v) =>
+              setBusinessForm({
+                ...businessForm,
+                state: v
               })
             }
           />
 
           <Field
             label="Pincode"
-            value={form.pincode}
-            onChange={(value) =>
-              setForm({
-                ...form,
-                pincode: value
+            value={businessForm.pincode}
+            onChange={(v) =>
+              setBusinessForm({
+                ...businessForm,
+                pincode: v
               })
             }
+          />
+
+          <Field
+            label="Invoice Prefix"
+            value={invoiceForm.invoice_prefix}
+            onChange={(v) =>
+              setInvoiceForm({
+                ...invoiceForm,
+                invoice_prefix: v
+              })
+            }
+          />
+
+          <Field
+            label="Default Tax Rate %"
+            type="number"
+            value={invoiceForm.default_tax_rate}
+            onChange={(v) =>
+              setInvoiceForm({
+                ...invoiceForm,
+                default_tax_rate: v
+              })
+            }
+          />
+
+          <Field
+            label="Currency"
+            value={invoiceForm.currency}
+            onChange={(v) =>
+              setInvoiceForm({
+                ...invoiceForm,
+                currency: v
+              })
+            }
+          />
+
+          <Field
+            label="Invoice Notes"
+            value={invoiceForm.invoice_notes}
+            onChange={(v) =>
+              setInvoiceForm({
+                ...invoiceForm,
+                invoice_notes: v
+              })
+            }
+            wide
+            textarea
+          />
+
+          <Field
+            label="Invoice Terms"
+            value={invoiceForm.invoice_terms}
+            onChange={(v) =>
+              setInvoiceForm({
+                ...invoiceForm,
+                invoice_terms: v
+              })
+            }
+            wide
+            textarea
           />
 
           {message && (
@@ -3590,9 +3952,10 @@ function SettingsPage({
 
           <div className="actions wide">
             <button disabled={busy}>
+              <Save />
               {busy
                 ? "Saving..."
-                : "Save Business Details"}
+                : "Save All Settings"}
             </button>
           </div>
         </form>
@@ -3606,14 +3969,9 @@ function SettingsPage({
 ========================================================= */
 
 export default function App() {
-  const [session, setSession] =
-    useState(null);
-
-  const [business, setBusiness] =
-    useState(null);
-
-  const [profile, setProfile] =
-    useState(null);
+  const [session, setSession] = useState(null);
+  const [business, setBusiness] = useState(null);
+  const [profile, setProfile] = useState(null);
 
   const [page, setPage] =
     useState("dashboard");
@@ -3631,42 +3989,33 @@ export default function App() {
     useState(true);
 
   async function account(uid) {
-    const {
-      data: profileData
-    } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("id", uid)
-      .maybeSingle();
+    const { data: profileData } =
+      await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", uid)
+        .maybeSingle();
 
-    const {
-      data: membership
-    } = await supabase
-      .from("business_members")
-      .select(
-        "business_id,role,businesses(*)"
-      )
-      .eq(
-        "user_id",
-        uid
-      )
-      .eq(
-        "role",
-        "owner"
-      )
-      .maybeSingle();
+    const { data: membership } =
+      await supabase
+        .from("business_members")
+        .select(
+          "business_id,role,businesses(*)"
+        )
+        .eq("user_id", uid)
+        .eq("role", "owner")
+        .maybeSingle();
 
     setProfile(profileData);
 
     setBusiness(
-      membership?.businesses ||
-        null
+      membership?.businesses || null
     );
 
     if (membership?.business_id) {
       const [
-        customerResult,
-        productResult
+        customers,
+        products
       ] = await Promise.all([
         supabase
           .from("customers")
@@ -3692,11 +4041,11 @@ export default function App() {
       ]);
 
       setCustomerCount(
-        customerResult.count || 0
+        customers.count || 0
       );
 
       setProductCount(
-        productResult.count || 0
+        products.count || 0
       );
     }
   }
@@ -3705,9 +4054,7 @@ export default function App() {
     supabase.auth
       .getSession()
       .then(({ data }) => {
-        setSession(
-          data.session
-        );
+        setSession(data.session);
 
         if (data.session) {
           account(
@@ -3754,8 +4101,7 @@ export default function App() {
 
   const current =
     NAV.find(
-      (item) =>
-        item[0] === page
+      (item) => item[0] === page
     ) || NAV[0];
 
   const Icon = current[2];
