@@ -20,7 +20,8 @@ import {
   Eye,
   Printer,
   Save,
-  FolderPlus
+  FolderPlus,
+  Banknote
 } from "lucide-react";
 
 import { supabase } from "./lib/supabase";
@@ -37,6 +38,7 @@ const NAV = [
   ["payments", "Payments", CreditCard],
   ["transactions", "Transactions", ArrowLeftRight],
   ["expenses", "Expenses", Receipt],
+  ["salary", "Salary", Banknote],
   ["reports", "Reports", BarChart3],
   ["settings", "Settings", Settings]
 ];
@@ -63,6 +65,28 @@ const emptyProduct = {
   description: "",
   unit: "sq ft",
   default_price: ""
+};
+
+const emptyStaff = {
+  name: "",
+  phone: "",
+  email: "",
+  designation: "",
+  joining_date: "",
+  monthly_salary: "",
+  status: "active",
+  notes: ""
+};
+
+const emptySalaryPayment = {
+  staff_id: "",
+  salary_month: new Date().toISOString().slice(0, 7) + "-01",
+  amount: "",
+  payment_date: new Date().toISOString().slice(0, 10),
+  payment_method: "Cash",
+  status: "paid",
+  reference_number: "",
+  notes: ""
 };
 
 const emptyExpense = {
@@ -864,16 +888,26 @@ function Products({ businessId, onCount }) {
               }
             />
 
-            <Field
-              label="Unit"
-              value={form.unit}
-              onChange={(v) =>
-                setForm({
-                  ...form,
-                  unit: v
-                })
-              }
-            />
+            <label className="field">
+              <span>Unit</span>
+              <select
+                value={form.unit}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    unit: e.target.value
+                  })
+                }
+              >
+                <option value="piece">Piece</option>
+                <option value="sq ft">Sq. Ft</option>
+                <option value="cu ft">Cu. Ft</option>
+                <option value="kg">Kg</option>
+                <option value="ton">Ton</option>
+                <option value="meter">Meter</option>
+                <option value="other">Other</option>
+              </select>
+            </label>
 
             <Field
               label="Default Price"
@@ -3965,6 +3999,574 @@ function SettingsPage({ business }) {
 }
 
 /* =========================================================
+   SALARY / STAFF
+========================================================= */
+
+function Salary({ businessId }) {
+  const [tab, setTab] = useState("payments");
+  const [staff, setStaff] = useState([]);
+  const [payments, setPayments] = useState([]);
+  const [modal, setModal] = useState(null);
+  const [staffForm, setStaffForm] = useState({ ...emptyStaff });
+  const [paymentForm, setPaymentForm] = useState({ ...emptySalaryPayment });
+  const [query, setQuery] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  async function load() {
+    if (!businessId) return;
+    setLoading(true);
+    setError("");
+
+    const [staffResult, paymentResult] = await Promise.all([
+      supabase
+        .from("staff")
+        .select("*")
+        .eq("business_id", businessId)
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("salary_payments")
+        .select("*, staff:staff_id(id,name,designation)")
+        .eq("business_id", businessId)
+        .order("salary_month", { ascending: false })
+        .order("payment_date", { ascending: false })
+    ]);
+
+    if (staffResult.error) setError(staffResult.error.message);
+    if (paymentResult.error) setError(paymentResult.error.message);
+
+    setStaff(staffResult.data || []);
+    setPayments(paymentResult.data || []);
+    setLoading(false);
+  }
+
+  useEffect(() => {
+    if (businessId) load();
+  }, [businessId]);
+
+  function openNewStaff() {
+    setStaffForm({ ...emptyStaff });
+    setError("");
+    setModal("staff-new");
+  }
+
+  function openEditStaff(item) {
+    setStaffForm({
+      ...emptyStaff,
+      ...item,
+      monthly_salary:
+        item.monthly_salary == null ? "" : item.monthly_salary
+    });
+    setError("");
+    setModal("staff-edit");
+  }
+
+  function openNewPayment() {
+    setPaymentForm({
+      ...emptySalaryPayment,
+      staff_id: staff[0]?.id || ""
+    });
+    setError("");
+    setModal("payment-new");
+  }
+
+  async function saveStaff(e) {
+    e.preventDefault();
+    setError("");
+
+    if (!staffForm.name.trim()) {
+      setError("Staff name is required.");
+      return;
+    }
+
+    const salary =
+      staffForm.monthly_salary === ""
+        ? 0
+        : Number(staffForm.monthly_salary);
+
+    if (!Number.isFinite(salary) || salary < 0) {
+      setError("Monthly salary must be a valid amount.");
+      return;
+    }
+
+    const {
+      data: { user }
+    } = await supabase.auth.getUser();
+
+    const payload = {
+      business_id: businessId,
+      name: staffForm.name.trim(),
+      phone: staffForm.phone || null,
+      email: staffForm.email || null,
+      designation: staffForm.designation || null,
+      joining_date: staffForm.joining_date || null,
+      monthly_salary: salary,
+      status: staffForm.status || "active",
+      notes: staffForm.notes || null,
+      created_by: staffForm.created_by || user?.id || null
+    };
+
+    const result = staffForm.id
+      ? await supabase
+          .from("staff")
+          .update(payload)
+          .eq("id", staffForm.id)
+      : await supabase
+          .from("staff")
+          .insert(payload);
+
+    if (result.error) {
+      setError(result.error.message);
+      return;
+    }
+
+    setModal(null);
+    load();
+  }
+
+  async function removeStaff(item) {
+    if (!confirm(`Delete ${item.name}? Salary history for this staff member will also be deleted.`)) return;
+
+    const { error } = await supabase
+      .from("staff")
+      .delete()
+      .eq("id", item.id);
+
+    if (error) setError(error.message);
+    else load();
+  }
+
+  async function savePayment(e) {
+    e.preventDefault();
+    setError("");
+
+    if (!paymentForm.staff_id) {
+      setError("Please select a staff member.");
+      return;
+    }
+
+    if (Number(paymentForm.amount) <= 0) {
+      setError("Enter a valid salary amount.");
+      return;
+    }
+
+    const {
+      data: { user }
+    } = await supabase.auth.getUser();
+
+    const payload = {
+      business_id: businessId,
+      staff_id: paymentForm.staff_id,
+      salary_month: paymentForm.salary_month || null,
+      amount: Number(paymentForm.amount),
+      payment_date: paymentForm.payment_date || null,
+      payment_method: paymentForm.payment_method || "Cash",
+      status: paymentForm.status || "paid",
+      reference_number: paymentForm.reference_number || null,
+      notes: paymentForm.notes || null,
+      paid_by: user?.id || null
+    };
+
+    const { error } = await supabase
+      .from("salary_payments")
+      .insert(payload);
+
+    if (error) {
+      setError(error.message);
+      return;
+    }
+
+    setModal(null);
+    load();
+  }
+
+  async function removePayment(item) {
+    if (!confirm("Delete this salary payment?")) return;
+
+    const { error } = await supabase
+      .from("salary_payments")
+      .delete()
+      .eq("id", item.id);
+
+    if (error) setError(error.message);
+    else load();
+  }
+
+  const filteredStaff = useMemo(() => {
+    const q = query.toLowerCase().trim();
+    if (!q) return staff;
+    return staff.filter((x) =>
+      [x.name, x.phone, x.email, x.designation, x.status].some((v) =>
+        String(v || "").toLowerCase().includes(q)
+      )
+    );
+  }, [staff, query]);
+
+  const filteredPayments = useMemo(() => {
+    const q = query.toLowerCase().trim();
+    if (!q) return payments;
+    return payments.filter((x) =>
+      [
+        x.staff?.name,
+        x.staff?.designation,
+        x.payment_method,
+        x.status,
+        x.reference_number,
+        x.notes,
+        x.salary_month
+      ].some((v) =>
+        String(v || "").toLowerCase().includes(q)
+      )
+    );
+  }, [payments, query]);
+
+  const totalPaid = payments.reduce(
+    (sum, x) => sum + Number(x.amount || 0),
+    0
+  );
+
+  return (
+    <Page
+      heading="Salary"
+      eyebrow="STAFF & SALARY MANAGEMENT"
+      sub="Manage staff members separately from business expenses and track salary payments."
+      action={
+        tab === "staff" ? (
+          <button onClick={openNewStaff}>
+            <Plus />
+            Add Staff
+          </button>
+        ) : (
+          <button onClick={openNewPayment} disabled={!staff.length}>
+            <Plus />
+            Record Salary
+          </button>
+        )
+      }
+    >
+      <section className="panel salary-summary">
+        <div>
+          <span>Active Staff</span>
+          <strong>{staff.filter((x) => x.status === "active").length}</strong>
+        </div>
+        <div>
+          <span>Total Staff</span>
+          <strong>{staff.length}</strong>
+        </div>
+        <div>
+          <span>Total Salary Paid</span>
+          <strong>{money(totalPaid)}</strong>
+        </div>
+      </section>
+
+      <div className="salary-tabs">
+        <button
+          className={tab === "payments" ? "active" : ""}
+          onClick={() => {
+            setTab("payments");
+            setQuery("");
+          }}
+        >
+          Salary Payments
+        </button>
+        <button
+          className={tab === "staff" ? "active" : ""}
+          onClick={() => {
+            setTab("staff");
+            setQuery("");
+          }}
+        >
+          Staff
+        </button>
+      </div>
+
+      <section className="panel">
+        <Toolbar
+          query={query}
+          setQuery={setQuery}
+          placeholder={
+            tab === "staff"
+              ? "Search staff, phone or designation..."
+              : "Search staff, month, method or status..."
+          }
+          count={
+            tab === "staff"
+              ? `${filteredStaff.length} staff`
+              : `${filteredPayments.length} payment${filteredPayments.length !== 1 ? "s" : ""}`
+          }
+        />
+
+        {error && <div className="error">{error}</div>}
+
+        {loading ? (
+          <Empty text="Loading salary records..." />
+        ) : tab === "staff" ? (
+          filteredStaff.length === 0 ? (
+            <Empty
+              icon={Users}
+              title="No staff yet"
+              button="Add Staff"
+              onClick={openNewStaff}
+            />
+          ) : (
+            <div className="table">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Staff</th>
+                    <th>Designation</th>
+                    <th>Phone</th>
+                    <th>Monthly Salary</th>
+                    <th>Status</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredStaff.map((item) => (
+                    <tr key={item.id}>
+                      <td>
+                        <strong>{item.name}</strong>
+                        <small>{item.email || "No email"}</small>
+                      </td>
+                      <td>{item.designation || "—"}</td>
+                      <td>{item.phone || "—"}</td>
+                      <td>{money(item.monthly_salary)}</td>
+                      <td><Status text={item.status} /></td>
+                      <td>
+                        <button className="icon" onClick={() => openEditStaff(item)}>
+                          <Pencil />
+                        </button>
+                        <button className="icon danger" onClick={() => removeStaff(item)}>
+                          <Trash2 />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )
+        ) : filteredPayments.length === 0 ? (
+          <Empty
+            icon={Banknote}
+            title="No salary payments yet"
+            text={staff.length ? "Record the first salary payment." : "Add staff before recording salary."}
+            button={staff.length ? "Record Salary" : "Add Staff"}
+            onClick={staff.length ? openNewPayment : openNewStaff}
+          />
+        ) : (
+          <div className="table">
+            <table>
+              <thead>
+                <tr>
+                  <th>Staff</th>
+                  <th>Salary Month</th>
+                  <th>Payment Date</th>
+                  <th>Amount</th>
+                  <th>Method</th>
+                  <th>Status</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredPayments.map((item) => (
+                  <tr key={item.id}>
+                    <td>
+                      <strong>{item.staff?.name || "—"}</strong>
+                      <small>{item.staff?.designation || "Staff"}</small>
+                    </td>
+                    <td>{dateIn(item.salary_month)}</td>
+                    <td>{dateIn(item.payment_date)}</td>
+                    <td><strong>{money(item.amount)}</strong></td>
+                    <td>{item.payment_method || "—"}</td>
+                    <td><Status text={item.status} /></td>
+                    <td>
+                      <button className="icon danger" onClick={() => removePayment(item)}>
+                        <Trash2 />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
+      {modal === "staff-new" || modal === "staff-edit" ? (
+        <Modal
+          title={modal === "staff-edit" ? "Edit Staff" : "Add Staff"}
+          onClose={() => setModal(null)}
+        >
+          <form className="grid" onSubmit={saveStaff}>
+            <Field
+              label="Staff Name *"
+              value={staffForm.name}
+              onChange={(v) => setStaffForm({ ...staffForm, name: v })}
+            />
+            <Field
+              label="Phone"
+              value={staffForm.phone}
+              onChange={(v) => setStaffForm({ ...staffForm, phone: v })}
+            />
+            <Field
+              label="Email"
+              value={staffForm.email}
+              onChange={(v) => setStaffForm({ ...staffForm, email: v })}
+            />
+            <Field
+              label="Designation"
+              value={staffForm.designation}
+              onChange={(v) => setStaffForm({ ...staffForm, designation: v })}
+            />
+            <Field
+              label="Joining Date"
+              type="date"
+              value={staffForm.joining_date}
+              onChange={(v) => setStaffForm({ ...staffForm, joining_date: v })}
+            />
+            <Field
+              label="Monthly Salary"
+              type="number"
+              value={staffForm.monthly_salary}
+              onChange={(v) => setStaffForm({ ...staffForm, monthly_salary: v })}
+            />
+            <label className="field">
+              <span>Status</span>
+              <select
+                value={staffForm.status}
+                onChange={(e) => setStaffForm({ ...staffForm, status: e.target.value })}
+              >
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
+              </select>
+            </label>
+            <Field
+              label="Notes"
+              value={staffForm.notes}
+              onChange={(v) => setStaffForm({ ...staffForm, notes: v })}
+              wide
+              textarea
+            />
+            {error && <div className="error wide">{error}</div>}
+            <div className="actions wide">
+              <button type="button" className="secondary" onClick={() => setModal(null)}>
+                Cancel
+              </button>
+              <button>
+                <Save />
+                Save Staff
+              </button>
+            </div>
+          </form>
+        </Modal>
+      ) : null}
+
+      {modal === "payment-new" && (
+        <Modal title="Record Salary Payment" onClose={() => setModal(null)}>
+          <form className="grid" onSubmit={savePayment}>
+            <label className="field wide">
+              <span>Staff *</span>
+              <select
+                value={paymentForm.staff_id}
+                onChange={(e) => {
+                  const id = e.target.value;
+                  const selected = staff.find((x) => x.id === id);
+                  setPaymentForm({
+                    ...paymentForm,
+                    staff_id: id,
+                    amount:
+                      paymentForm.amount === ""
+                        ? selected?.monthly_salary ?? ""
+                        : paymentForm.amount
+                  });
+                }}
+              >
+                <option value="">Select staff</option>
+                {staff.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.name}{item.designation ? ` — ${item.designation}` : ""}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <Field
+              label="Salary Month"
+              type="date"
+              value={paymentForm.salary_month}
+              onChange={(v) => setPaymentForm({ ...paymentForm, salary_month: v })}
+            />
+            <Field
+              label="Amount *"
+              type="number"
+              value={paymentForm.amount}
+              onChange={(v) => setPaymentForm({ ...paymentForm, amount: v })}
+            />
+            <Field
+              label="Payment Date"
+              type="date"
+              value={paymentForm.payment_date}
+              onChange={(v) => setPaymentForm({ ...paymentForm, payment_date: v })}
+            />
+
+            <label className="field">
+              <span>Payment Method</span>
+              <select
+                value={paymentForm.payment_method}
+                onChange={(e) => setPaymentForm({ ...paymentForm, payment_method: e.target.value })}
+              >
+                <option>Cash</option>
+                <option>UPI</option>
+                <option>Bank Transfer</option>
+                <option>Cheque</option>
+                <option>Other</option>
+              </select>
+            </label>
+
+            <label className="field">
+              <span>Status</span>
+              <select
+                value={paymentForm.status}
+                onChange={(e) => setPaymentForm({ ...paymentForm, status: e.target.value })}
+              >
+                <option value="paid">Paid</option>
+                <option value="partial">Partial</option>
+                <option value="pending">Pending</option>
+              </select>
+            </label>
+
+            <Field
+              label="Reference Number"
+              value={paymentForm.reference_number}
+              onChange={(v) => setPaymentForm({ ...paymentForm, reference_number: v })}
+            />
+            <Field
+              label="Notes"
+              value={paymentForm.notes}
+              onChange={(v) => setPaymentForm({ ...paymentForm, notes: v })}
+              wide
+              textarea
+            />
+
+            {error && <div className="error wide">{error}</div>}
+            <div className="actions wide">
+              <button type="button" className="secondary" onClick={() => setModal(null)}>
+                Cancel
+              </button>
+              <button>
+                <Save />
+                Save Salary Payment
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
+    </Page>
+  );
+}
+
+/* =========================================================
    MAIN APP
 ========================================================= */
 
@@ -4242,6 +4844,12 @@ export default function App() {
 
         {page === "expenses" && (
           <Expenses
+            businessId={business?.id}
+          />
+        )}
+
+        {page === "salary" && (
+          <Salary
             businessId={business?.id}
           />
         )}
