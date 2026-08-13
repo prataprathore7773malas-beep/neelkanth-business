@@ -736,6 +736,127 @@ td:last-child {
   word-break: break-word;
 }
 
+
+/* =========================================================
+   SALARY / STAFF
+========================================================= */
+
+.salary-summary {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+  margin-bottom: 15px;
+}
+
+.salary-summary > div {
+  min-height: 95px;
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #fffaf4;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.salary-summary span {
+  color: var(--muted);
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-weight: 800;
+}
+
+.salary-summary strong {
+  color: var(--text);
+  font: 600 25px Georgia, serif;
+  word-break: break-word;
+}
+
+.salary-tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 15px;
+  padding: 5px;
+  width: fit-content;
+  background: #eadfD2;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.salary-tabs button {
+  background: transparent;
+  color: var(--muted);
+  padding: 9px 15px;
+  border-radius: 7px;
+  font-size: 10px;
+  font-weight: 800;
+  transition: 0.2s ease;
+}
+
+.salary-tabs button:hover {
+  color: var(--brown);
+}
+
+.salary-tabs button.active {
+  background: var(--brown);
+  color: #fff;
+  box-shadow: 0 2px 7px rgba(56, 35, 20, 0.12);
+}
+
+/* Salary table refinements */
+.salary-summary + .salary-tabs + .panel {
+  min-width: 0;
+}
+
+.salary-summary + .salary-tabs + .panel .table table {
+  min-width: 760px;
+}
+
+/* Staff/payment modal forms */
+.modal .grid .field small {
+  color: var(--muted-2);
+  font-size: 9px;
+}
+
+@media (max-width: 760px) {
+  .salary-summary {
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .salary-summary > div {
+    min-height: 85px;
+    padding: 14px;
+  }
+
+  .salary-summary strong {
+    font-size: 20px;
+  }
+
+  .salary-summary > div:last-child {
+    grid-column: 1 / -1;
+  }
+
+  .salary-tabs {
+    width: 100%;
+  }
+
+  .salary-tabs button {
+    flex: 1;
+  }
+}
+
+@media (max-width: 430px) {
+  .salary-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .salary-summary > div:last-child {
+    grid-column: auto;
+  }
+}
+
 /* =========================================================
    INVOICE
 ========================================================= */
@@ -753,7 +874,7 @@ td:last-child {
 
 .invoice-row {
   display: grid;
-  grid-template-columns: minmax(180px, 2fr) 90px 100px 120px 130px 40px;
+  grid-template-columns: minmax(180px, 2fr) 85px 95px 110px 120px 40px;
   gap: 8px;
   align-items: end;
   padding: 12px;
@@ -1053,7 +1174,7 @@ td:last-child {
   }
 
   .invoice-row {
-    grid-template-columns: 2fr 80px 90px 110px 120px 38px;
+    grid-template-columns: 2fr 75px 85px 100px 110px 38px;
   }
 }
 
